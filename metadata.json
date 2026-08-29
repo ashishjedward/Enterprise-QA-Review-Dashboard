@@ -1,0 +1,6 @@
+{
+  "name": "Enterprise QA Review Dashboard",
+  "description": "Executive leadership and operational QA review dashboard across enterprise, vertical, account, site, and QA leadership levels.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
