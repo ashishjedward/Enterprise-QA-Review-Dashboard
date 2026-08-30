@@ -46,7 +46,7 @@ import {
 } from '../types/api';
 
 type TabView = 'REGISTER' | 'AGEING_DISTRIBUTION' | 'PERIOD_ACTIVITY' | 'ACCOUNT_ROLLUP';
-type StatusPillFilter = 'ALL' | 'OVERDUE' | 'DUE_SOON' | 'ON_TRACK' | 'CLOSED' | 'HIGH_CRITICAL';
+type StatusPillFilter = 'ALL' | 'OPEN' | 'OVERDUE' | 'DUE_SOON' | 'ON_TRACK' | 'HIGH_CRITICAL' | 'CLOSED' | 'FUTURE';
 
 export const ActionsPage: React.FC = () => {
   const { 
@@ -126,6 +126,8 @@ export const ActionsPage: React.FC = () => {
     return data.actionRegister
       .filter((item) => {
         // Status filter
+        if (statusFilter === 'OPEN' && item.asOfTodayStatus !== 'OPEN') return false;
+        if (statusFilter === 'FUTURE' && item.asOfTodayStatus !== 'FUTURE') return false;
         if (statusFilter === 'OVERDUE' && !item.overdueFlag) return false;
         if (
           statusFilter === 'DUE_SOON' &&
@@ -358,11 +360,11 @@ export const ActionsPage: React.FC = () => {
             {/* Total Backlog */}
             <div
               onClick={() => {
-                setStatusFilter('ALL');
+                setStatusFilter('OPEN');
                 setActiveTab('REGISTER');
               }}
               className={`p-3 rounded-md border cursor-pointer transition-all flex flex-col justify-between ${
-                statusFilter === 'ALL' && activeTab === 'REGISTER'
+                statusFilter === 'OPEN' && activeTab === 'REGISTER'
                   ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
                   : 'bg-white border-slate-200 hover:bg-slate-50'
               }`}
@@ -691,11 +693,13 @@ export const ActionsPage: React.FC = () => {
                   {(
                     [
                       { key: 'ALL', label: 'All' },
+                      { key: 'OPEN', label: 'Open' },
                       { key: 'OVERDUE', label: 'Overdue' },
-                      { key: 'DUE_SOON', label: 'Due Next 7d' },
-                      { key: 'ON_TRACK', label: 'On-Track' },
-                      { key: 'HIGH_CRITICAL', label: 'High/Crit' },
+                      { key: 'DUE_SOON', label: 'Due Next 7 Days' },
+                      { key: 'ON_TRACK', label: 'On-Track Open' },
+                      { key: 'HIGH_CRITICAL', label: 'High / Critical Open' },
                       { key: 'CLOSED', label: 'Closed' },
+                      { key: 'FUTURE', label: 'Future / Planned' },
                     ] as const
                   ).map((st) => (
                     <button
