@@ -377,7 +377,7 @@ export const ActionsPage: React.FC = () => {
               <div className="text-[10px] opacity-75 mt-1 flex items-center justify-between">
                 <span>{backlog?.eligibleActionCount ?? 0} eligible actions in scope</span>
                 {backlog?.futureActionCount ? (
-                  <span className="text-amber-400 font-medium">({backlog.futureActionCount} fut.)</span>
+                  <span className="text-amber-400 font-medium">({backlog.futureActionCount} future / planned)</span>
                 ) : null}
               </div>
             </div>
@@ -932,6 +932,7 @@ export const ActionsPage: React.FC = () => {
                             <td className="py-2.5 px-2 font-mono text-right whitespace-nowrap">
                               {act.asOfTodayStatus === 'OPEN' && act.currentAgeingDays !== null ? (
                                 <span
+                                  title="Current ageing from Open Date to today."
                                   className={`font-bold ${
                                     act.currentAgeingDays > 60
                                       ? 'text-rose-700'
@@ -943,7 +944,10 @@ export const ActionsPage: React.FC = () => {
                                   {act.currentAgeingDays}d open
                                 </span>
                               ) : act.asOfTodayStatus === 'CLOSED' && act.closureDurationDays !== null ? (
-                                <span className="text-slate-500 font-medium text-[11px]">
+                                <span
+                                  title="Elapsed time from Open Date to Closed Date."
+                                  className="text-slate-500 font-medium text-[11px]"
+                                >
                                   {act.closureDurationDays}d to close
                                 </span>
                               ) : (

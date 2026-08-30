@@ -1238,6 +1238,184 @@ export interface ActionsDiagnosticResponse {
   data: ActionsDiagnosticData;
 }
 
+// ====================================================
+// Value-adds & Transformation Diagnostic Types
+// ====================================================
+
+export interface ValueAddsReportingContext {
+  latestAvailableMonth: string;
+  latestClosedMonth: string;
+  currentOpenMonth: string;
+  officialReportingMonth: string;
+  currentSubmissionDeadline: string;
+  selectedTimePeriod: string;
+  startDate: string;
+  endDate: string;
+}
+
+export interface ValueAddsScopeSummary {
+  accountCount: number;
+  vertical: string | null;
+  accountId: string | null;
+  qaLeader: string | null;
+  srDirector: string | null;
+  site: string | null;
+  lob: string | null;
+}
+
+export interface ValueAddsCurrentPortfolio {
+  qaasOpenOpportunities: number;
+  qaasOpenTargetValue: number | null;
+  qaasOpenOpportunityValue: number | null;
+  tapActiveProjects: number;
+  tapActiveAtRiskProjects: number;
+  tapTotalProjects: number;
+  tapClosedProjects: number;
+  tapPlannedProjects: number;
+}
+
+export interface QaasSummary {
+  totalRecords: number;
+  openCount: number;
+  wonCount: number;
+  deliveredCount: number;
+  realizedCount: number;
+  totalTargetValue: number | null;
+  totalOpportunityValue: number | null;
+  valueAchievementPct: number | null;
+  realizedTargetValue: number | null;
+  realizedOpportunityValue: number | null;
+  realizedAchievementPct: number | null;
+}
+
+export interface QaasDistributionRow {
+  status?: string;
+  stage?: string;
+  count: number;
+  targetValue: number;
+  opportunityValue: number;
+}
+
+export interface QaasMonthlyPoint {
+  month: string;
+  count: number;
+  openCount: number;
+  wonCount: number;
+  deliveredCount: number;
+  targetValue: number;
+  opportunityValue: number;
+}
+
+export interface QaasRegisterRow {
+  opportunityId: string;
+  month: string;
+  accountId: string;
+  accountName: string;
+  bu: string | null;
+  vertical: string | null;
+  metricType: string | null;
+  currentStage: string;
+  status: string;
+  targetValue: number;
+  revenueValue: number;
+  realizationPct: number | null;
+  clientApproval: boolean;
+  statusRag: string | null;
+  remarks: string | null;
+}
+
+export interface TapSummary {
+  totalProjects: number;
+  activeProjects: number;
+  atRiskProjects: number;
+  closedProjects: number;
+  plannedProjects: number;
+  totalTargetBenefit: number | null;
+  recordedRealizedBenefit: number | null;
+  portfolioRealizationPct: number | null;
+  closedRealizationPct: number | null;
+}
+
+export interface TapLeverDistributionRow {
+  lever: string;
+  count: number;
+  targetBenefit: number;
+  realizedBenefit: number;
+}
+
+export interface TapBenefitTypeDistributionRow {
+  benefitType: string;
+  count: number;
+  targetBenefit: number;
+  realizedBenefit: number;
+}
+
+export interface TapPeriodActivity {
+  projectsInitiated: number;
+  projectsCompleted: number;
+  projectsLogged: number;
+}
+
+export interface TapRegisterRow {
+  projectId: string;
+  month: string | null;
+  accountId: string;
+  accountName: string;
+  bu: string | null;
+  vertical: string | null;
+  projectName: string;
+  processName: string | null;
+  category: string | null;
+  tapLever: string | null;
+  benefitType: string | null;
+  currentStage: string | null;
+  sourceStatus: string;
+  asOfTodayStatus: string;
+  projectApproval: string | null;
+  actualStartDate: string | null;
+  actualEndDate: string | null;
+  expectedEndDate: string | null;
+  targetBenefit: number;
+  realizedBenefit: number;
+  realizationPct: number | null;
+  statusRag: string | null;
+  latestUpdate: string | null;
+  isAtRisk: boolean;
+}
+
+export interface ValueAddsCommercialContext {
+  billedRevenue: number | null;
+  planRevenue: number | null;
+  revenueAchievementPct: number | null;
+  penaltyExposureValue: number | null;
+  actualPenaltyPaidValue: number | null;
+  rewardOpportunityValue: number | null;
+  actualRewardEarnedValue: number | null;
+  netCommercialImpact: number | null;
+}
+
+export interface ValueAddsDiagnosticData {
+  reportingContext: ValueAddsReportingContext;
+  scope: ValueAddsScopeSummary;
+  currentPortfolio: ValueAddsCurrentPortfolio;
+  qaasSummary: QaasSummary;
+  qaasStatusDistribution: QaasDistributionRow[];
+  qaasStageDistribution: QaasDistributionRow[];
+  qaasMonthlyTrend: QaasMonthlyPoint[];
+  qaasRegister: QaasRegisterRow[];
+  tapSummary: TapSummary;
+  tapLeverDistribution: TapLeverDistributionRow[];
+  tapBenefitTypeDistribution: TapBenefitTypeDistributionRow[];
+  tapPeriodActivity: TapPeriodActivity;
+  tapRegister: TapRegisterRow[];
+  commercialContext: ValueAddsCommercialContext;
+}
+
+export interface ValueAddsDiagnosticResponse {
+  data: ValueAddsDiagnosticData;
+}
+
+
 
 
 

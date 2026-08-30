@@ -10,6 +10,7 @@ import { fetchBestQmDiagnostic } from './server/bestQmDiagnostic';
 import { fetchHygieneDiagnostic } from './server/hygieneDiagnostic';
 import { fetchQaTeamDiagnostic } from './server/qaTeamDiagnostic';
 import { fetchActionsDiagnostic } from './server/actionsDiagnostic';
+import { fetchValueAddsDiagnostic } from './server/valueAddsDiagnostic';
 
 const PORT = 3000;
 
@@ -421,6 +422,48 @@ async function startServer() {
       return res.status(500).json({
         error: {
           message: 'Unable to load Actions diagnostic data',
+        },
+      });
+    }
+  });
+
+  // ----------------------------------------------------
+  // ENDPOINT 10: GET /api/value-adds-diagnostic
+  // Supports optional query parameters: timePeriod, vertical, qaLeader, srDirector, accountId, site, lob
+  // Fully parameterized queries against BigQuery semantic views
+  // ----------------------------------------------------
+  app.get('/api/value-adds-diagnostic', async (req, res) => {
+    try {
+      const timePeriodQuery = typeof req.query.timePeriod === 'string' ? req.query.timePeriod : undefined;
+      const validTimePeriods = ['3M', '6M', 'YTD', '12M'];
+      if (timePeriodQuery && !validTimePeriods.includes(timePeriodQuery)) {
+        return res.status(400).json({
+          error: {
+            message: `Invalid timePeriod: ${timePeriodQuery}. Allowed values: 3M, 6M, YTD, 12M`,
+          },
+        });
+      }
+
+      const filters = {
+        timePeriod: timePeriodQuery,
+        vertical: typeof req.query.vertical === 'string' ? req.query.vertical : undefined,
+        qaLeader: typeof req.query.qaLeader === 'string' ? req.query.qaLeader : undefined,
+        srDirector: typeof req.query.srDirector === 'string' ? req.query.srDirector : undefined,
+        accountId: typeof req.query.accountId === 'string' ? req.query.accountId : undefined,
+        site: typeof req.query.site === 'string' ? req.query.site : undefined,
+        lob: typeof req.query.lob === 'string' ? req.query.lob : undefined,
+      };
+
+      const data = await fetchValueAddsDiagnostic(filters);
+      return res.status(200).json({
+        data,
+      });
+    } catch (err: unknown) {
+      const errMsg = (err as Error)?.message || 'Unable to load Value-adds diagnostic data';
+      console.error('Failed to query Value-adds diagnostic:', errMsg);
+      return res.status(500).json({
+        error: {
+          message: 'Unable to load Value-adds diagnostic data',
         },
       });
     }
