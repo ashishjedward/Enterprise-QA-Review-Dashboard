@@ -334,11 +334,12 @@ export async function fetchInsightsDiagnostic(
       GROUP BY Account_ID
     ),
     live_zt_global AS (
+      -- HR Action Required is authoritative from vw_zt_tracker.Requires_HR_Action. Do not infer from ZTP reason or closure workflow fields.
       SELECT
         Account_ID,
         COUNTIF(Is_Open = TRUE) AS Open_ZT_Count,
         COUNTIF(Is_Open = TRUE AND Is_Client_Identified = TRUE) AS Client_Open_ZT_Count,
-        COUNTIF(Is_Open = TRUE AND (Requires_HR_Action = TRUE OR UPPER(ZTP_Reason) != 'COMPLIANCE LAPSE')) AS HR_Action_Open_ZT_Count,
+        COUNTIF(Is_Open = TRUE AND Requires_HR_Action = TRUE) AS HR_Action_Open_ZT_Count,
         MAX(IF(Is_Open = TRUE, Pending_From_Ageing, NULL)) AS Max_ZT_Ageing_Days
       FROM \`${projectId}.${dataset}.vw_zt_tracker\`
       GROUP BY Account_ID
