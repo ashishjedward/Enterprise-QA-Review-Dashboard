@@ -27,6 +27,7 @@ import {
 } from 'recharts';
 import { useFilters } from '../context/FilterContext';
 import { StatusBadge } from '../components/common/StatusBadge';
+import { DiagnosticPageHeader } from '../components/common/DiagnosticPageHeader';
 import { getHygieneDiagnostic } from '../services/api';
 import {
   HygieneDiagnosticData,
@@ -327,81 +328,57 @@ export const HygieneInputsPage: React.FC = () => {
   const chartConfig = getChartConfig();
 
   return (
-    <div className="space-y-3.5 max-w-[1600px] mx-auto pb-10">
-      {/* Breadcrumb & Top Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-200">
-        <div className="flex items-center gap-2 text-xs text-slate-500">
+    <div className="space-y-4 max-w-[1600px] mx-auto pb-10">
+      {/* Shared Diagnostic Page Header */}
+      <DiagnosticPageHeader
+        title="Operational Hygiene & Governance"
+        breadcrumbLabel="Hygiene Inputs & Operational Governance"
+        description="Authoritative quality governance tracking 5 core Hygiene KPIs (M006–M010) and TNI published adherence."
+        contextBadges={
+          <>
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-mono border border-slate-200">
+              <Calendar className="w-3 h-3 text-slate-500" />
+              Closed: {reportingContext.officialReportingMonth}
+            </span>
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-mono border border-slate-200">
+              <ShieldCheck className="w-3 h-3 text-slate-500" />
+              {scope.totalAccounts} {scope.totalAccounts === 1 ? 'Account' : 'Accounts'} in Scope
+            </span>
+          </>
+        }
+        secondaryActions={
           <button
-            onClick={() => navigateToPage('overview')}
-            className="text-slate-600 hover:text-slate-900 font-medium cursor-pointer"
-          >
-            Enterprise
-          </button>
-          <span>&gt;</span>
-          <span className="font-bold text-[#1A2B4B]">Hygiene Inputs & Operational Governance</span>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
+            type="button"
             onClick={() => openDrawer('hygiene')}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-[#0D9488] bg-teal-50 border border-teal-200 rounded-xs hover:bg-teal-100 transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-[#0D9488] bg-teal-50 border border-teal-200 rounded hover:bg-teal-100 transition-colors cursor-pointer"
           >
             <ExternalLink className="w-3.5 h-3.5" />
             <span>Open Hygiene Drawer</span>
           </button>
+        }
+      />
 
-          <button
-            onClick={() => navigateToPage('overview')}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-xs hover:bg-slate-50 transition-colors cursor-pointer"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Back to Overview</span>
-          </button>
+      {/* Scope & Risk Breakdown Summary Strip */}
+      <div className="bg-white border border-slate-200 rounded p-3 shadow-xs flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-2">
+          <span className="text-slate-500 text-xs font-bold uppercase tracking-wider">
+            Portfolio Compliance Breakdown
+          </span>
         </div>
-      </div>
-
-      {/* Headline Header Banner */}
-      <div className="bg-white border border-slate-200 rounded-xs p-3.5 shadow-xs">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xs bg-teal-50 border border-teal-200 flex items-center justify-center text-[#0D9488] shrink-0">
-              <CheckCircle2 className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-sm sm:text-base font-bold text-[#1A2B4B] tracking-tight uppercase">
-                  Operational Hygiene & Governance Matrix
-                </h1>
-                <span className="px-2 py-0.5 text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200 rounded-xs">
-                  Closed: {reportingContext.officialReportingMonth}
-                </span>
-              </div>
-              <p className="text-xs text-slate-500">
-                Authoritative quality governance tracking 5 core Hygiene KPIs (M006–M010) and TNI published adherence.
-              </p>
-            </div>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-slate-50 border border-slate-200">
+            <span className="text-slate-500 text-[11px] font-medium">No Red/Amber KPI:</span>
+            <span className="font-bold text-emerald-700 font-mono">{scope.accountsNoRedAmber}</span>
           </div>
-
-          {/* Scope & Risk Breakdown Summary */}
-          <div className="flex flex-wrap items-center gap-2 bg-slate-50 p-2 rounded-xs border border-slate-200 text-xs">
-            <div className="pr-2 border-r border-slate-200">
-              <span className="text-slate-400 text-[10px] uppercase font-bold block">Accounts in Scope:</span>
-              <span className="font-bold text-[#1A2B4B] font-mono">{scope.totalAccounts}</span>
-            </div>
-            <div className="pr-2 border-r border-slate-200">
-              <span className="text-slate-400 text-[10px] uppercase font-bold block">No Red/Amber KPI:</span>
-              <span className="font-bold text-emerald-700 font-mono">{scope.accountsNoRedAmber}</span>
-            </div>
-            <div className="pr-2 border-r border-slate-200">
-              <span className="text-slate-400 text-[10px] uppercase font-bold block">Has Amber KPI:</span>
-              <span className="font-bold text-amber-700 font-mono">{scope.accountsWithAmber}</span>
-            </div>
-            <div>
-              <span className="text-slate-400 text-[10px] uppercase font-bold block">Has Red KPI:</span>
-              <span className={`font-bold font-mono ${scope.accountsWithRed > 0 ? 'text-rose-700' : 'text-slate-700'}`}>
-                {scope.accountsWithRed}
-              </span>
-            </div>
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-slate-50 border border-slate-200">
+            <span className="text-slate-500 text-[11px] font-medium">Has Amber KPI:</span>
+            <span className="font-bold text-amber-700 font-mono">{scope.accountsWithAmber}</span>
+          </div>
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-slate-50 border border-slate-200">
+            <span className="text-slate-500 text-[11px] font-medium">Has Red KPI:</span>
+            <span className={`font-bold font-mono ${scope.accountsWithRed > 0 ? 'text-rose-700' : 'text-slate-700'}`}>
+              {scope.accountsWithRed}
+            </span>
           </div>
         </div>
       </div>

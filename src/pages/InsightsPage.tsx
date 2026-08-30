@@ -1,12 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
-  Sparkles,
-  ArrowLeft,
   RefreshCw,
   AlertCircle,
-  Clock,
-  Compass,
-  FileText,
+  Calendar,
 } from 'lucide-react';
 import { useFilters } from '../context/FilterContext';
 import { getInsightsDiagnostic } from '../services/api';
@@ -14,6 +10,7 @@ import {
   InsightsDiagnosticData,
   InsightsTimePeriod,
 } from '../types/api';
+import { DiagnosticPageHeader } from '../components/common/DiagnosticPageHeader';
 import { ExecutiveSynthesisHeader } from '../components/insights/ExecutiveSynthesisHeader';
 import { PriorityInsightsSection } from '../components/insights/PriorityInsightsSection';
 import { CrossPortfolioThemesSection } from '../components/insights/CrossPortfolioThemesSection';
@@ -95,43 +92,33 @@ export const InsightsPage: React.FC = () => {
   if (!data) return null;
 
   return (
-    <div className="space-y-6 max-w-[1600px] mx-auto pb-12">
-      {/* Breadcrumb & Navigation Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200">
-        <div className="flex items-center gap-2 text-xs text-slate-500">
-          <button
-            type="button"
-            onClick={() => navigateToPage('overview')}
-            className="text-slate-600 hover:text-slate-900 font-medium cursor-pointer"
-          >
-            Enterprise
-          </button>
-          <span>/</span>
-          <span className="font-bold text-slate-900">Leadership Insights & Executive Radar</span>
-        </div>
-
-        <div className="flex items-center gap-2">
+    <div className="space-y-4 max-w-[1600px] mx-auto pb-10">
+      {/* Shared Diagnostic Page Header */}
+      <DiagnosticPageHeader
+        title="Leadership Insights & Executive Radar"
+        breadcrumbLabel="Leadership Insights & Executive Radar"
+        description="Evidence-backed leadership priorities, cross-portfolio risk and period trajectories."
+        contextBadges={
+          data?.reportingContext?.reportingMonth ? (
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-mono border border-slate-200">
+              <Calendar className="w-3 h-3 text-slate-500" />
+              Official: {data.reportingContext.reportingMonth}
+            </span>
+          ) : undefined
+        }
+        secondaryActions={
           <button
             type="button"
             onClick={loadData}
             disabled={loading}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded hover:bg-slate-50 transition-colors cursor-pointer shadow-xs disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded hover:bg-slate-50 transition-colors cursor-pointer shadow-2xs disabled:opacity-50"
             title="Refresh live data"
           >
             <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${loading ? 'animate-spin' : ''}`} />
             <span>Refresh</span>
           </button>
-
-          <button
-            type="button"
-            onClick={() => navigateToPage('overview')}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded hover:bg-slate-50 transition-colors cursor-pointer shadow-xs"
-          >
-            <ArrowLeft className="w-3.5 h-3.5 text-slate-500" />
-            <span>Executive Overview</span>
-          </button>
-        </div>
-      </div>
+        }
+      />
 
       {/* 1. Executive Synthesis & Governance Radar Header */}
       <ExecutiveSynthesisHeader

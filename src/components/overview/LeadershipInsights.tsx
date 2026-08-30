@@ -10,9 +10,12 @@ export const LeadershipInsights: React.FC = () => {
   const kpis = overview?.KPI_Cards || [];
   const m002 = kpis.find((k) => k.Metric_ID === 'M002');
 
-  const redSentimentCount = overview?.Client_Sentiment_Red_Accounts ?? 0;
-  const highRiskCount = overview?.Accounts_With_Red_KPI ?? ((overview?.Critical_Attention_Accounts ?? 0) + (overview?.High_Attention_Accounts ?? 0));
-  const overdueCount = overview?.Overdue_Actions ?? 0;
+  const redSentimentCount: number = typeof overview?.Client_Sentiment_Red_Accounts === 'number' ? overview.Client_Sentiment_Red_Accounts : 0;
+  const openEscalations: number = typeof overview?.Open_Escalations === 'number' ? overview.Open_Escalations : (Number(overview?.Open_Escalations) || 0);
+
+  const openActionCount: number = overview?.Action_Snapshot?.Open_Actions ?? 0;
+  const overdueCount: number = overview?.Action_Snapshot?.Overdue_Actions ?? 0;
+  const closureRateDisplay: string = overview?.Action_Snapshot?.Closure_Rate_Display ?? 'N/A';
 
   const getTargetDisplay = (kpi?: { Target_Display?: string | null; Target_Value?: number | null }, isPct = true) => {
     if (kpi?.Target_Display) return kpi.Target_Display;
@@ -21,6 +24,8 @@ export const LeadershipInsights: React.FC = () => {
     }
     return 'N/A';
   };
+
+  const hasClientOrEscalationRisk = redSentimentCount > 0 || openEscalations > 0;
 
   const topInsights = [
     {
@@ -31,18 +36,24 @@ export const LeadershipInsights: React.FC = () => {
       tag: 'SLA & Contracts',
     },
     {
-      id: 'ins-attention',
-      title: `${highRiskCount} accounts flagged for leadership inspection`,
-      description: `${redSentimentCount} accounts have Red client sentiment, with ${overview?.Open_Escalations != null ? `${overview.Open_Escalations} cases` : 'active'} active escalations across the current scope.`,
-      type: 'risk',
-      tag: 'Risk & Escalations',
+      id: 'ins-risk-escalation',
+      title: hasClientOrEscalationRisk
+        ? 'Client and escalation risk requires leadership attention'
+        : 'No Red client sentiment or open escalations in current scope',
+      description: hasClientOrEscalationRisk
+        ? `${redSentimentCount} ${redSentimentCount === 1 ? 'account has' : 'accounts have'} Red client sentiment; ${openEscalations} ${openEscalations === 1 ? 'escalation is' : 'escalations are'} currently open across the current scope.`
+        : 'All monitored accounts currently maintain acceptable client sentiment and zero open operational escalations.',
+      type: hasClientOrEscalationRisk ? 'risk' : 'info',
+      tag: 'Client & Escalations',
     },
     {
       id: 'ins-governance',
-      title: `${overview?.Total_Actions || 0} governance actions currently tracked`,
-      description: `Overall closure rate is ${overview?.Action_Snapshot?.Closure_Rate_Display || (overview?.Action_Closure_Rate_Pct !== null && overview?.Action_Closure_Rate_Pct !== undefined ? `${(overview.Action_Closure_Rate_Pct * 100).toFixed(1)}%` : 'N/A')} with ${overdueCount} overdue items pending sign-off.`,
+      title: openActionCount > 0
+        ? `${openActionCount} ${openActionCount === 1 ? 'action remains' : 'actions remain'} open across the current portfolio`
+        : 'No open governance actions in current scope',
+      description: `Action closure rate is ${closureRateDisplay}; ${overdueCount} ${overdueCount === 1 ? 'action is' : 'actions are'} overdue.`,
       type: overdueCount > 0 ? 'action' : 'info',
-      tag: 'CAPA Governance',
+      tag: 'Action Governance',
     },
   ];
 
@@ -103,15 +114,15 @@ export const LeadershipInsights: React.FC = () => {
           ))}
         </div>
 
-        {/* Leadership Attention */}
+        {/* Leadership Radar */}
         <div className="pt-2 border-t border-border-subtle">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-eyebrow text-slate-700 flex items-center gap-1.5">
+            <span className="text-eyebrow text-slate-700 flex items-center gap-1.5 uppercase font-bold tracking-wider">
               <AlertTriangle className="w-4 h-4 text-status-red-dot" />
-              Leadership Attention
+              Leadership Radar
             </span>
             <button
-              onClick={() => openDrawer('attention')}
+              onClick={() => navigateToPage('insights')}
               className="text-caption font-medium text-teal-600 hover:underline cursor-pointer"
             >
               Inspect All &rarr;
@@ -127,20 +138,20 @@ export const LeadershipInsights: React.FC = () => {
               <span className="text-label text-slate-700">Red Client Sentiment</span>
               <div className="flex items-center gap-2">
                 <span className="text-label font-bold text-status-red-text tnum">
-                  {redSentimentCount} Accounts
+                  {redSentimentCount} {redSentimentCount === 1 ? 'Account' : 'Accounts'}
                 </span>
                 <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-700 group-hover:translate-x-0.5 transition-transform" />
               </div>
             </button>
 
             <button
-              onClick={() => openDrawer('attention')}
+              onClick={() => navigateToPage('process-health')}
               className="w-full px-3 py-2 bg-surface hover:bg-surface-hover active:bg-slate-100 flex items-center justify-between text-left transition-colors cursor-pointer group"
             >
-              <span className="text-label text-slate-700">High Risk Monitored</span>
+              <span className="text-label text-slate-700">Open Escalations</span>
               <div className="flex items-center gap-2">
                 <span className="text-label font-bold text-status-red-text tnum">
-                  {highRiskCount} Accounts
+                  {openEscalations} {openEscalations === 1 ? 'Case' : 'Cases'}
                 </span>
                 <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-700 group-hover:translate-x-0.5 transition-transform" />
               </div>
@@ -153,7 +164,7 @@ export const LeadershipInsights: React.FC = () => {
               <span className="text-label text-slate-700">Overdue Actions</span>
               <div className="flex items-center gap-2">
                 <span className="text-label font-bold text-status-red-text tnum">
-                  {overdueCount} CAPAs
+                  {overdueCount} {overdueCount === 1 ? 'Action' : 'Actions'}
                 </span>
                 <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-700 group-hover:translate-x-0.5 transition-transform" />
               </div>
@@ -176,3 +187,4 @@ export const LeadershipInsights: React.FC = () => {
     </div>
   );
 };
+

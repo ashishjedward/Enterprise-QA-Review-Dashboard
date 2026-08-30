@@ -24,6 +24,8 @@ import {
 } from 'lucide-react';
 import { useFilters } from '../context/FilterContext';
 import { getValueAddsDiagnostic } from '../services/api';
+import { StatusBadge } from '../components/common/StatusBadge';
+import { DiagnosticPageHeader } from '../components/common/DiagnosticPageHeader';
 import {
   ValueAddsDiagnosticData,
   QaasRegisterRow,
@@ -197,45 +199,21 @@ export const ValueAddsPage: React.FC = () => {
   const isScopeEmpty = data?.scope.accountCount === 0;
 
   return (
-    <div className="pt-4 space-y-4 max-w-[1600px] mx-auto pb-10">
-      {/* 1. Header & Navigation */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200">
-        <div>
-          <div className="flex items-center gap-2 text-xs text-slate-500 mb-1">
-            <button
-              onClick={() => navigateToPage('overview')}
-              className="text-slate-600 hover:text-slate-900 font-medium cursor-pointer"
-            >
-              Enterprise
-            </button>
-            <span>&gt;</span>
-            <span className="font-medium text-slate-600">Diagnostics</span>
-            <span>&gt;</span>
-            <span className="font-semibold text-slate-800">Value-adds &amp; Transformation Program</span>
-          </div>
-          <div className="flex flex-wrap items-center gap-2.5">
-            <h1 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">
-              Value-adds &amp; Transformation Program
-            </h1>
-            {data?.reportingContext?.officialReportingMonth && (
-              <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded bg-slate-100 text-slate-700 font-mono border border-slate-200">
-                <Calendar className="w-3 h-3 text-slate-500" />
-                Official: {data.reportingContext.officialReportingMonth}
-              </span>
-            )}
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 shrink-0">
-          <button
-            onClick={() => navigateToPage('overview')}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Back to Overview</span>
-          </button>
-        </div>
-      </div>
+    <div className="space-y-4 max-w-[1600px] mx-auto pb-10">
+      {/* Shared Diagnostic Page Header */}
+      <DiagnosticPageHeader
+        title="Value-adds & Transformation Program"
+        breadcrumbLabel="Value-adds & Transformation"
+        description="QaaS opportunity value, transformation portfolio and recorded benefit."
+        contextBadges={
+          data?.reportingContext?.officialReportingMonth ? (
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-mono border border-slate-200">
+              <Calendar className="w-3 h-3 text-slate-500" />
+              Official: {data.reportingContext.officialReportingMonth}
+            </span>
+          ) : undefined
+        }
+      />
 
       {/* Error state */}
       {error && (

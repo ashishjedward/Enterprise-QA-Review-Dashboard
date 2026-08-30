@@ -32,6 +32,7 @@ import {
 } from 'recharts';
 import { useFilters } from '../context/FilterContext';
 import { StatusBadge } from '../components/common/StatusBadge';
+import { DiagnosticPageHeader } from '../components/common/DiagnosticPageHeader';
 import { getQaTeamDiagnostic } from '../services/api';
 import {
   QaTeamDiagnosticData,
@@ -249,46 +250,27 @@ export const QATeamPage: React.FC = () => {
 
   return (
     <div className="space-y-4 max-w-[1600px] mx-auto pb-10">
-      {/* 1. Breadcrumb & Operational Context Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2 pb-2 border-b border-slate-200">
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          <button
-            onClick={() => navigateToPage('overview')}
-            className="text-slate-600 hover:text-slate-900 font-medium"
-          >
-            Enterprise
-          </button>
-          <span className="text-slate-400">&gt;</span>
-          <span className="font-bold text-slate-900">QA Team Capacity & Staffing Diagnostic</span>
-
-          {/* Temporal Status Badge */}
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-100 border border-slate-200 text-[11px] font-semibold text-slate-700">
-            <Calendar className="w-3 h-3 text-slate-500" />
-            Closed Snapshot: {reportingContext.officialReportingMonth}
-          </span>
-
-          {/* Range Coverage Badge */}
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-100 border border-slate-200 text-[11px] font-semibold text-slate-700">
-            Period: {rangeContext.requestedPeriod} ({rangeContext.availableMonthCount} of {rangeContext.requestedMonthCount} Mo)
-          </span>
-
-          {/* Scope Indicator Badge */}
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-50 border border-blue-200 text-[11px] font-semibold text-blue-800">
-            <Users className="w-3 h-3 text-blue-600" />
-            {scopeSummary.totalAccounts} {scopeSummary.totalAccounts === 1 ? 'Account' : 'Accounts'} in Scope
-          </span>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => navigateToPage('overview')}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded hover:bg-slate-50 transition-colors cursor-pointer"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Back to Overview</span>
-          </button>
-        </div>
-      </div>
+      {/* Shared Diagnostic Page Header */}
+      <DiagnosticPageHeader
+        title="QA Team Capacity & Staffing"
+        breadcrumbLabel="QA Team Capacity & Staffing"
+        description="Staffing capacity, QA utilization, attrition and billing coverage."
+        contextBadges={
+          <>
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-mono border border-slate-200">
+              <Calendar className="w-3 h-3 text-slate-500" />
+              Closed Snapshot: {reportingContext.officialReportingMonth}
+            </span>
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-mono border border-slate-200">
+              Period: {rangeContext.requestedPeriod} ({rangeContext.availableMonthCount} of {rangeContext.requestedMonthCount} Mo)
+            </span>
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-mono border border-slate-200">
+              <Users className="w-3 h-3 text-slate-500" />
+              {scopeSummary.totalAccounts} {scopeSummary.totalAccounts === 1 ? 'Account' : 'Accounts'} in Scope
+            </span>
+          </>
+        }
+      />
 
       {/* 2. Headline Factual KPI Cards (Closed Operating Snapshot) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
