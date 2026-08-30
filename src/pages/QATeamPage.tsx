@@ -47,7 +47,7 @@ type AccountTableFilter =
   | 'EXACTLY_STAFFED'
   | 'UTILIZATION_RED'
   | 'ATTRITION_RED'
-  | 'BILLING_DEFICIT';
+  | 'BILLING_BELOW_STANDARD';
 
 type TrendMetricView = 'STAFFING' | 'UTILIZATION' | 'ATTRITION' | 'BILLING';
 
@@ -117,7 +117,7 @@ export const QATeamPage: React.FC = () => {
         exact: 0,
         utilRed: 0,
         attrRed: 0,
-        billDeficit: 0,
+        billBelowStandard: 0,
       };
     }
     const rows = data.accountRegister;
@@ -128,7 +128,7 @@ export const QATeamPage: React.FC = () => {
       exact: rows.filter((r) => r.staffingVariance === 0).length,
       utilRed: rows.filter((r) => r.utilizationRag === 'Red').length,
       attrRed: rows.filter((r) => r.attritionRag === 'Red').length,
-      billDeficit: rows.filter((r) => (r.billableFte !== null && r.billedFte !== null && r.billedFte < r.billableFte) || r.billingRag === 'Amber' || r.billingRag === 'Red').length,
+      billBelowStandard: rows.filter((r) => r.billingRag === 'Amber' || r.billingRag === 'Red').length,
     };
   }, [data?.accountRegister]);
 
@@ -141,9 +141,8 @@ export const QATeamPage: React.FC = () => {
       if (tableFilter === 'EXACTLY_STAFFED' && row.staffingVariance !== 0) return false;
       if (tableFilter === 'UTILIZATION_RED' && row.utilizationRag !== 'Red') return false;
       if (tableFilter === 'ATTRITION_RED' && row.attritionRag !== 'Red') return false;
-      if (tableFilter === 'BILLING_DEFICIT') {
-        const isDeficit = (row.billableFte !== null && row.billedFte !== null && row.billedFte < row.billableFte) || row.billingRag === 'Amber' || row.billingRag === 'Red';
-        if (!isDeficit) return false;
+      if (tableFilter === 'BILLING_BELOW_STANDARD') {
+        if (row.billingRag !== 'Amber' && row.billingRag !== 'Red') return false;
       }
 
       if (searchQuery.trim()) {
@@ -877,18 +876,18 @@ export const QATeamPage: React.FC = () => {
           </button>
 
           <button
-            onClick={() => setTableFilter('BILLING_DEFICIT')}
+            onClick={() => setTableFilter('BILLING_BELOW_STANDARD')}
             className={`px-2.5 py-1 rounded font-medium transition-colors cursor-pointer flex items-center gap-1.5 ${
-              tableFilter === 'BILLING_DEFICIT'
+              tableFilter === 'BILLING_BELOW_STANDARD'
                 ? 'bg-purple-700 text-white font-bold'
                 : 'bg-purple-50 text-purple-800 hover:bg-purple-100 border border-purple-200'
             }`}
           >
-            Billing Deficit
+            Billing Below Standard
             <span className={`px-1.5 py-0.2 rounded text-[10px] font-mono ${
-              tableFilter === 'BILLING_DEFICIT' ? 'bg-purple-800 text-purple-100' : 'bg-purple-200 text-purple-900'
+              tableFilter === 'BILLING_BELOW_STANDARD' ? 'bg-purple-800 text-purple-100' : 'bg-purple-200 text-purple-900'
             }`}>
-              {filterCounts.billDeficit}
+              {filterCounts.billBelowStandard}
             </span>
           </button>
         </div>
@@ -1016,7 +1015,7 @@ export const QATeamPage: React.FC = () => {
                     </td>
                     <td className="py-2.5 px-2 text-center">
                       <button
-                        onClick={() => selectAccountAndNavigate(row.accountId, row.accountName)}
+                        onClick={() => selectAccountAndNavigate(row.accountId)}
                         className="inline-flex items-center gap-1 px-2 py-1 bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 rounded text-[11px] font-medium transition-colors cursor-pointer"
                         title="View Account 360 Diagnostic"
                       >

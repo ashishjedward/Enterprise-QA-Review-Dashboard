@@ -9,6 +9,7 @@ import { fetchSlaDiagnostic } from './server/slaDiagnostic';
 import { fetchBestQmDiagnostic } from './server/bestQmDiagnostic';
 import { fetchHygieneDiagnostic } from './server/hygieneDiagnostic';
 import { fetchQaTeamDiagnostic } from './server/qaTeamDiagnostic';
+import { fetchActionsDiagnostic } from './server/actionsDiagnostic';
 
 const PORT = 3000;
 
@@ -381,6 +382,45 @@ async function startServer() {
       return res.status(500).json({
         error: {
           message: 'Unable to load QA Team diagnostic data',
+        },
+      });
+    }
+  });
+
+  // ----------------------------------------------------
+  // ENDPOINT 9: GET /api/actions-diagnostic
+  // Supports optional query parameters: timePeriod, vertical, qaLeader, srDirector, accountId, site, lob
+  // Fully parameterized queries against BigQuery semantic views
+  // ----------------------------------------------------
+  app.get('/api/actions-diagnostic', async (req, res) => {
+    try {
+      const filters = {
+        timePeriod: typeof req.query.timePeriod === 'string' ? req.query.timePeriod : undefined,
+        vertical: typeof req.query.vertical === 'string' ? req.query.vertical : undefined,
+        qaLeader: typeof req.query.qaLeader === 'string' ? req.query.qaLeader : undefined,
+        srDirector: typeof req.query.srDirector === 'string' ? req.query.srDirector : undefined,
+        accountId: typeof req.query.accountId === 'string' ? req.query.accountId : undefined,
+        site: typeof req.query.site === 'string' ? req.query.site : undefined,
+        lob: typeof req.query.lob === 'string' ? req.query.lob : undefined,
+      };
+
+      const data = await fetchActionsDiagnostic(filters);
+      return res.status(200).json({
+        data,
+      });
+    } catch (err: unknown) {
+      const errMsg = (err as Error)?.message || 'Unable to load Actions diagnostic data';
+      if (errMsg.includes('Invalid timePeriod')) {
+        return res.status(400).json({
+          error: {
+            message: errMsg,
+          },
+        });
+      }
+      console.error('Failed to query Actions diagnostic:', errMsg);
+      return res.status(500).json({
+        error: {
+          message: 'Unable to load Actions diagnostic data',
         },
       });
     }

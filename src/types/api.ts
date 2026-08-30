@@ -144,6 +144,7 @@ export interface DashboardOverviewData {
   Target_Revenue?: number | null;
   Revenue_Achievement_Pct?: number | null;
   Staff_Variance?: number | null;
+  Net_Staff_Over_Under?: number | null;
   Hygiene_Inputs?: {
     Audits_Completed_Achievement_Pct?: number | null;
     Hygiene_Audits_Compliance_Pct?: number | null;
@@ -1099,6 +1100,144 @@ export interface QaTeamDiagnosticData {
 export interface QaTeamDiagnosticResponse {
   data: QaTeamDiagnosticData;
 }
+
+// ----------------------------------------------------
+// ACTIONS & CLOSURE MANAGEMENT DIAGNOSTIC TYPES
+// ----------------------------------------------------
+export type ActionsTimePeriod = '3M' | '6M' | 'YTD' | '12M';
+
+export interface ActionsReportingContext {
+  businessTimezone: string;
+  currentDate: string;
+  selectedPeriod: ActionsTimePeriod;
+  periodStartDate: string;
+  periodEndDate: string;
+}
+
+export interface ActionsScopeSummary {
+  totalAccountsInScope: number;
+  accountsWithEligibleActions: number;
+  accountsWithOpenActions: number;
+  accountsWithOverdueActions: number;
+  accountsWithHighCritActions: number;
+}
+
+export interface ActionsCurrentBacklog {
+  totalActionCount: number;
+  eligibleActionCount: number;
+  futureActionCount: number;
+  openActions: number;
+  closedActions: number;
+  overdueActions: number;
+  dueNext7Days: number;
+  onTrackOpen: number;
+  criticalOpen: number;
+  highOpen: number;
+  mediumOpen: number;
+  highCriticalOpen: number;
+  closureRate: number | null;
+  closureRateDisplay: string;
+  closureRateTarget: null;
+  closureRateRag: null;
+  averageOpenAgeingDays: number | null;
+  oldestOpenAgeingDays: number | null;
+  averageClosureEffectivenessClosed: number | null;
+  averageClosureEffectivenessDisplay: string;
+}
+
+export interface ActionsAgeingDistribution {
+  range0To7Days: number;
+  range8To15Days: number;
+  range16To30Days: number;
+  range31To60Days: number;
+  range60PlusDays: number;
+}
+
+export interface ActionsDistributionRow {
+  category: string;
+  total: number;
+  open: number;
+  closed: number;
+}
+
+export interface ActionsHistoricalPoint {
+  monthKey: string;
+  monthLabel: string;
+  actionsOpened: number;
+  actionsClosed: number;
+  netFlow: number;
+}
+
+export interface ActionsSelectedPeriodActivity {
+  actionsOpened: number;
+  actionsClosed: number;
+  netFlow: number;
+  historicalActivity: ActionsHistoricalPoint[];
+}
+
+export interface ActionsAccountRollupRow {
+  accountId: string;
+  accountName: string;
+  vertical: string;
+  qaLeader: string;
+  srDirector: string;
+  site: string;
+  lob: string;
+  totalActions: number;
+  eligibleActions: number;
+  openActions: number;
+  closedActions: number;
+  overdueActions: number;
+  dueNext7Days: number;
+  highCriticalOpen: number;
+  closureRate: number | null;
+  closureRateDisplay: string;
+  oldestOpenAgeingDays: number | null;
+}
+
+export interface ActionRegisterRow {
+  actionId: string;
+  accountId: string;
+  accountName: string;
+  vertical: string;
+  qaLeader: string;
+  site: string;
+  lob: string;
+  source: string;
+  riskType: string;
+  action: string;
+  owner: string;
+  priority: string;
+  sourceStatus: string;
+  asOfTodayStatus: 'OPEN' | 'CLOSED' | 'FUTURE';
+  openDate: string;
+  dueDate: string;
+  closedDate: string | null;
+  currentAgeingDays: number | null;
+  closureDurationDays: number | null;
+  daysOpenSource: number;
+  overdueFlag: boolean;
+  closureEffectiveness: number | null;
+  evidence: string | null;
+  isHighPriority: boolean;
+}
+
+export interface ActionsDiagnosticData {
+  reportingContext: ActionsReportingContext;
+  scopeSummary: ActionsScopeSummary;
+  currentBacklog: ActionsCurrentBacklog;
+  ageingDistribution: ActionsAgeingDistribution;
+  priorityDistribution: ActionsDistributionRow[];
+  sourceDistribution: ActionsDistributionRow[];
+  selectedPeriodActivity: ActionsSelectedPeriodActivity;
+  accountRollup: ActionsAccountRollupRow[];
+  actionRegister: ActionRegisterRow[];
+}
+
+export interface ActionsDiagnosticResponse {
+  data: ActionsDiagnosticData;
+}
+
 
 
 

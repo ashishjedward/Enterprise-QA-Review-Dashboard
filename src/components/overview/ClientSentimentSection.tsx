@@ -19,7 +19,16 @@ export const ClientSentimentSection: React.FC = () => {
   const greenPct = total > 0 ? Math.max(0, 100 - redPct - amberPct) : 0;
 
   const rawRag = overview?.Enterprise_Client_Sentiment_RAG;
-  const overallRag = (rawRag ? String(rawRag).toUpperCase() : 'Normal') as RAGStatus;
+  const normalizedRag = rawRag ? rawRag.toUpperCase() : null;
+  const overallRag = (normalizedRag || 'NORMAL') as RAGStatus;
+
+  const postureLabel = normalizedRag === 'GREEN'
+    ? 'Healthy'
+    : normalizedRag === 'AMBER'
+      ? 'Watch'
+      : normalizedRag === 'RED'
+        ? 'At Risk'
+        : 'N/A';
 
   const topAttention = overview?.Top_Attention_Accounts?.[0];
 
@@ -65,7 +74,7 @@ export const ClientSentimentSection: React.FC = () => {
               <span className="text-metric-lg text-navy-900 font-bold tnum">
                 {overview?.Enterprise_Client_Sentiment_Display || `${total - redCount}/${total}`}
               </span>
-              <span className="text-caption text-slate-500 font-medium">Healthy</span>
+              <span className="text-caption text-slate-500 font-medium">{postureLabel}</span>
             </div>
           </div>
           <div className="mt-3 pt-2 border-t border-border-subtle flex items-center justify-between">
@@ -191,7 +200,7 @@ export const ClientSentimentSection: React.FC = () => {
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-status-red-dot shrink-0" />
               <span className="text-label text-status-red-text leading-snug">
-                {redCount} Red accounts require immediate attention
+                {redCount === 1 ? '1 account requires' : `${redCount} accounts require`} immediate sentiment attention.
               </span>
             </div>
             <div className="flex justify-end">
@@ -206,13 +215,13 @@ export const ClientSentimentSection: React.FC = () => {
             <div className="flex items-center gap-2 min-w-0">
               <span className="w-2 h-2 rounded-full bg-status-red-dot shrink-0 animate-pulse" />
               <span className="text-label font-bold text-status-red-text shrink-0">
-                {redCount} Red accounts require immediate attention
+                {redCount === 1 ? '1 account requires' : `${redCount} accounts require`} immediate sentiment attention.
               </span>
               {topAttention && (
                 <>
                   <span className="text-slate-300 inline">|</span>
                   <span className="text-caption text-slate-600 truncate inline">
-                    Highest risk: <strong className="text-navy-900">{topAttention.Account_Name || topAttention.Account || topAttention.Account_ID}</strong> ({topAttention.Primary_Attention_Driver || topAttention.Key_Issue || 'Critical risk identified'})
+                    Highest risk: <strong className="text-navy-900">{topAttention.Account_Name || topAttention.Account_ID}</strong> ({topAttention.Primary_Attention_Driver || 'Immediate attention required'})
                   </span>
                 </>
               )}
@@ -225,11 +234,55 @@ export const ClientSentimentSection: React.FC = () => {
             </button>
           </div>
         </>
+      ) : amberCount > 0 ? (
+        <>
+          {/* Mobile Attention Card (< md) */}
+          <div
+            onClick={() => openDrawer('sentiment-amber')}
+            className="md:hidden bg-status-amber-bg border border-status-amber-border rounded p-3 transition-colors active:bg-amber-100/60 cursor-pointer flex flex-col justify-between gap-2"
+          >
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-status-amber-dot shrink-0" />
+              <span className="text-label text-status-amber-text leading-snug">
+                {amberCount === 1 ? '1 account requires' : `${amberCount} accounts require`} sentiment watch.
+              </span>
+            </div>
+            <div className="flex justify-end">
+              <span className="text-caption font-bold text-status-amber-text flex items-center gap-1">
+                View Watchlist &rarr;
+              </span>
+            </div>
+          </div>
+
+          {/* Desktop Attention Strip (>= md) */}
+          <div className="hidden md:flex flex-row items-center justify-between gap-2 bg-status-amber-bg border border-status-amber-border rounded px-3 py-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="w-2 h-2 rounded-full bg-status-amber-dot shrink-0" />
+              <span className="text-label font-bold text-status-amber-text shrink-0">
+                {amberCount === 1 ? '1 account requires' : `${amberCount} accounts require`} sentiment watch.
+              </span>
+              {topAttention && (
+                <>
+                  <span className="text-slate-300 inline">|</span>
+                  <span className="text-caption text-slate-600 truncate inline">
+                    Attention: <strong className="text-navy-900">{topAttention.Account_Name || topAttention.Account_ID}</strong> ({topAttention.Primary_Attention_Driver || 'Watchlist priority'})
+                  </span>
+                </>
+              )}
+            </div>
+            <button
+              onClick={() => openDrawer('sentiment-amber')}
+              className="text-label font-bold text-status-amber-text hover:underline flex items-center gap-1 shrink-0 cursor-pointer group"
+            >
+              <span>View Watchlist &rarr;</span>
+            </button>
+          </div>
+        </>
       ) : (
         <div className="flex items-center justify-between bg-status-green-bg border border-status-green-border rounded px-3 py-2 text-label text-status-green-text font-medium">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-status-green-dot" />
-            <span className="text-label">All monitored accounts currently maintain healthy client sentiment posture.</span>
+            <span className="text-label">All monitored accounts are currently Green on client sentiment.</span>
           </div>
           <button
             onClick={() => openDrawer('sentiment-all')}

@@ -14,6 +14,8 @@ import {
   HygieneTimePeriod,
   QaTeamDiagnosticResponse,
   QaTeamTimePeriod,
+  ActionsDiagnosticResponse,
+  ActionsTimePeriod,
 } from '../types/api';
 
 class ApiError extends Error {
@@ -335,5 +337,52 @@ export async function getQaTeamDiagnostic(
   });
   return handleResponse<QaTeamDiagnosticResponse>(response);
 }
+
+/**
+ * Fetches Actions and Closure Management diagnostic data across scoped accounts.
+ */
+export async function getActionsDiagnostic(
+  filters?: DashboardScopeFilters & { timePeriod?: string; account?: string }
+): Promise<ActionsDiagnosticResponse> {
+  const params = new URLSearchParams();
+  if (filters) {
+    if (filters.timePeriod && filters.timePeriod !== 'ALL') {
+      params.set('timePeriod', filters.timePeriod);
+    }
+    if (filters.vertical && filters.vertical !== 'ALL') {
+      params.set('vertical', filters.vertical);
+    }
+    if (filters.qaLeader && filters.qaLeader !== 'ALL') {
+      params.set('qaLeader', filters.qaLeader);
+    }
+    if (filters.srDirector && filters.srDirector !== 'ALL') {
+      params.set('srDirector', filters.srDirector);
+    }
+    const accId = filters.accountId || filters.account;
+    if (accId && accId !== 'ALL') {
+      params.set('accountId', accId);
+    }
+    if (filters.site && filters.site !== 'ALL') {
+      params.set('site', filters.site);
+    }
+    if (filters.lob && filters.lob !== 'ALL') {
+      params.set('lob', filters.lob);
+    }
+  }
+
+  const query = params.toString();
+  const url = query ? `/api/actions-diagnostic?${query}` : '/api/actions-diagnostic';
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      Accept: 'application/json',
+    },
+  });
+  return handleResponse<ActionsDiagnosticResponse>(response);
+}
+
+// Alias for convenience
+export const fetchActionsDiagnostic = getActionsDiagnostic;
 
 export { ApiError };

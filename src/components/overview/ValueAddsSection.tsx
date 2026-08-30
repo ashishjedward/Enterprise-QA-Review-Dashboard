@@ -79,7 +79,7 @@ export const ValueAddsSection: React.FC = () => {
 
   const tapActive = Number(overview?.TAP_Active_Projects ?? 0);
   const tapBenefit = overview?.TAP_Realized_Benefit !== null && overview?.TAP_Realized_Benefit !== undefined 
-    ? `$${(Number(overview.TAP_Realized_Benefit) / 1000).toFixed(0)}K` 
+    ? `${(Number(overview.TAP_Realized_Benefit) / 1000000).toFixed(2)}M` 
     : null;
 
   return (

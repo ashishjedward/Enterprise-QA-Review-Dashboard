@@ -6,38 +6,55 @@ import { useDashboardData } from '../../context/DashboardDataContext';
 import { RAGStatus } from '../../types';
 
 export const QATeamSection: React.FC = () => {
-  const { navigateToPage } = useFilters();
+  const { navigateToPage, selectAccountAndNavigate } = useFilters();
   const { overview } = useDashboardData();
 
   const kpis = overview?.KPI_Cards || [];
   const m011 = kpis.find((k) => k.Metric_ID === 'M011');
   const m012 = kpis.find((k) => k.Metric_ID === 'M012');
 
-  const getTargetDisplay = (kpi?: { Target_Display?: string | null; Target_Value?: number | null }, isPct = true) => {
+  const getTargetDisplay = (kpi?: { Target_Display?: string | null; Target_Value?: number | null }, isPct = true, fallback = 'N/A') => {
     if (kpi?.Target_Display) return kpi.Target_Display;
     if (kpi?.Target_Value !== null && kpi?.Target_Value !== undefined) {
       return isPct ? `${(kpi.Target_Value * 100).toFixed(1)}%` : kpi.Target_Value.toFixed(1);
     }
-    return 'N/A';
+    return fallback;
   };
 
   const qaUtilValue = m011?.Actual_Display || (m011?.Actual_Value !== null && m011?.Actual_Value !== undefined ? `${(m011.Actual_Value * 100).toFixed(1)}%` : 'N/A');
-  const qaUtilTarget = getTargetDisplay(m011, true);
-  const qaUtilRag = (m011?.RAG?.toUpperCase() as RAGStatus) || ('Normal' as any);
+  const qaUtilTarget = getTargetDisplay(m011, true, '90%');
+  const qaUtilRag = (m011?.RAG ? (m011.RAG.toUpperCase() as RAGStatus) : undefined);
 
   const qaAttritionValue = m012?.Actual_Display || (m012?.Actual_Value !== null && m012?.Actual_Value !== undefined ? `${(m012.Actual_Value * 100).toFixed(1)}%` : 'N/A');
-  const qaAttritionTarget = m012?.Target_Display ? `< ${m012.Target_Display}` : (m012?.Target_Value !== null && m012?.Target_Value !== undefined ? `< ${(m012.Target_Value * 100).toFixed(1)}%` : 'N/A');
-  const qaAttritionRag = (m012?.RAG?.toUpperCase() as RAGStatus) || ('Normal' as any);
+  const qaAttritionTarget = getTargetDisplay(m012, true, '10%');
+  const qaAttritionRag = (m012?.RAG ? (m012.RAG.toUpperCase() as RAGStatus) : undefined);
 
-  const staffVariance = overview?.Staff_Variance ?? 0;
-  const staffRag = (staffVariance >= 0 ? 'GREEN' : 'AMBER') as RAGStatus;
+  const netStaffOverUnder = overview?.Net_Staff_Over_Under ?? 0;
+  const staffVariance = Number(netStaffOverUnder) || 0;
+  const staffVarianceDisplay = staffVariance > 0 
+    ? `+${staffVariance} FTEs` 
+    : staffVariance < 0 
+      ? `−${Math.abs(staffVariance)} FTEs` 
+      : '0 FTEs';
+
+  const staffContext = staffVariance > 0 
+    ? 'Over Requirement' 
+    : staffVariance < 0 
+      ? 'Under Requirement' 
+      : 'Exactly Staffed';
 
   const topAttention = overview?.Top_Attention_Accounts || [];
-  const highRiskSites = topAttention.slice(0, 3).map((acc) => ({
-    site: `${acc.Account}${acc.Site ? ` (${acc.Site})` : ''}`,
-    issue: acc.Key_Issue || `SLA/Hygiene risk (${acc.Critical_Issues_Count} issues)`,
-    rag: (acc.Priority === 'CRITICAL' ? 'RED' : 'AMBER') as RAGStatus,
-  }));
+  const attentionAccounts = topAttention.slice(0, 3).map((acc) => {
+    const band = (acc.Attention_Band || '').toUpperCase();
+    const rag: RAGStatus = (band === 'CRITICAL' || band === 'HIGH') ? 'RED' : 'AMBER';
+    return {
+      accountId: acc.Account_ID,
+      accountName: acc.Account_Name || 'Unknown Account',
+      driver: acc.Primary_Attention_Driver?.trim() || 'Governance priority',
+      band: acc.Attention_Band || 'Watch',
+      rag,
+    };
+  });
 
   return (
     <div className="bg-surface border border-border-default rounded shadow-elevation-1 p-3 sm:p-4 flex flex-col justify-between h-full">
@@ -72,20 +89,19 @@ export const QATeamSection: React.FC = () => {
             <div>
               <div className="flex items-center justify-between">
                 <span className="text-eyebrow text-slate-500">Staff Over/Under</span>
-                <StatusBadge status={staffRag} size="xs" />
               </div>
               <div className="mt-2 flex items-baseline justify-between">
                 <span className="text-metric-sm text-navy-900 tnum">
-                  {staffVariance > 0 ? `+${staffVariance}` : staffVariance} FTEs
+                  {staffVarianceDisplay}
                 </span>
                 <span className="text-caption text-slate-500 font-medium">
-                  {staffVariance < 0 ? 'Deficit' : 'Balanced'}
+                  {staffContext}
                 </span>
               </div>
             </div>
             <div className="mt-3 pt-2 border-t border-border-subtle flex items-center justify-between text-caption text-slate-500">
-              <span>Roster Balance</span>
-              <span className="font-semibold text-navy-900 tnum">{staffVariance >= 0 ? 'On Target' : 'Action Required'}</span>
+              <span>Posture</span>
+              <span className="font-semibold text-navy-900 tnum">{staffContext}</span>
             </div>
           </div>
 
@@ -94,7 +110,7 @@ export const QATeamSection: React.FC = () => {
             <div>
               <div className="flex items-center justify-between">
                 <span className="text-eyebrow text-slate-500">QA Utilisation</span>
-                <StatusBadge status={qaUtilRag} size="xs" />
+                {qaUtilRag && <StatusBadge status={qaUtilRag} size="xs" />}
               </div>
               <div className="mt-2 flex items-baseline justify-between">
                 <span className="text-metric-sm text-navy-900 tnum">
@@ -118,49 +134,50 @@ export const QATeamSection: React.FC = () => {
             <div>
               <div className="flex items-center justify-between">
                 <span className="text-eyebrow text-slate-500">QA Attrition Rate</span>
-                <StatusBadge status={qaAttritionRag} size="xs" />
+                {qaAttritionRag && <StatusBadge status={qaAttritionRag} size="xs" />}
               </div>
               <div className="mt-2 flex items-baseline justify-between">
                 <span className="text-metric-sm text-navy-900 tnum">
                   {qaAttritionValue}
                 </span>
                 <span className="text-caption text-slate-500 font-medium tnum">
-                  Limit: {qaAttritionTarget}
+                  Target: {qaAttritionTarget}
                 </span>
               </div>
             </div>
             <div className="mt-3 pt-2 border-t border-border-subtle flex items-center justify-between text-caption text-slate-500">
               <span>Variance</span>
               <span className="font-semibold text-navy-900 tnum">
-                {m012?.Favourable_Variance != null ? `${m012.Favourable_Variance >= 0 ? '-' : '+'}${(Math.abs(m012.Favourable_Variance) * 100).toFixed(1)}%` : 'N/A'}
+                {m012?.Favourable_Variance != null ? `${m012.Favourable_Variance >= 0 ? '+' : ''}${(m012.Favourable_Variance * 100).toFixed(1)}%` : 'N/A'}
               </span>
             </div>
           </div>
         </div>
 
-        {/* High Risk Teams or Sites */}
+        {/* Attention Accounts */}
         <div>
           <div className="text-eyebrow text-slate-500 mb-2 flex items-center gap-1.5">
             <Building2 className="w-4 h-4 text-slate-400" />
-            Attention Accounts & Pods
+            Attention Accounts
           </div>
           <div className="divide-y divide-border-subtle border border-border-default rounded overflow-hidden">
-            {highRiskSites.length > 0 ? (
-              highRiskSites.map((pod, idx) => (
+            {attentionAccounts.length > 0 ? (
+              attentionAccounts.map((acc, idx) => (
                 <div
-                  key={idx}
-                  className="px-3 py-2 bg-surface flex items-center justify-between gap-2 hover:bg-surface-hover transition-colors"
+                  key={acc.accountId || idx}
+                  onClick={() => acc.accountId && selectAccountAndNavigate ? selectAccountAndNavigate(acc.accountId) : navigateToPage('qa-team')}
+                  className="px-3 py-2 bg-surface flex items-center justify-between gap-2 hover:bg-surface-hover transition-colors cursor-pointer"
                 >
                   <div className="flex items-center gap-2 truncate">
-                    <span className="text-label text-navy-900 truncate">{pod.site}</span>
-                    <span className="text-caption text-slate-500 truncate hidden sm:inline">&mdash; {pod.issue}</span>
+                    <span className="text-label font-medium text-navy-900 truncate">{acc.accountName}</span>
+                    <span className="text-caption text-slate-500 truncate hidden sm:inline">&mdash; {acc.driver}</span>
                   </div>
-                  <StatusBadge status={pod.rag} size="xs" />
+                  <StatusBadge status={acc.rag} label={acc.band} size="xs" />
                 </div>
               ))
             ) : (
               <div className="px-3 py-3 bg-surface text-caption text-slate-500 text-center">
-                No high-risk pods or attention accounts in current filter scope
+                No attention accounts in current filter scope
               </div>
             )}
           </div>
