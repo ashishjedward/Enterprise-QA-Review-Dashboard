@@ -1,123 +1,164 @@
-import React from 'react';
-import { Lightbulb, TrendingUp, AlertTriangle, ShieldCheck, ArrowLeft, Target, Award, ArrowRight } from 'lucide-react';
+import React, { useEffect, useState, useCallback } from 'react';
+import {
+  Sparkles,
+  ArrowLeft,
+  RefreshCw,
+  AlertCircle,
+  Clock,
+  Compass,
+  FileText,
+} from 'lucide-react';
 import { useFilters } from '../context/FilterContext';
-import { KEY_INSIGHTS_DATA, ACCOUNTS_DATA } from '../data/dummyData';
-import { StatusBadge } from '../components/common/StatusBadge';
+import { getInsightsDiagnostic } from '../services/api';
+import {
+  InsightsDiagnosticData,
+  InsightsTimePeriod,
+} from '../types/api';
+import { ExecutiveSynthesisHeader } from '../components/insights/ExecutiveSynthesisHeader';
+import { PriorityInsightsSection } from '../components/insights/PriorityInsightsSection';
+import { CrossPortfolioThemesSection } from '../components/insights/CrossPortfolioThemesSection';
+import { PositiveSignalsSection } from '../components/insights/PositiveSignalsSection';
+import { RiskRadarTable } from '../components/insights/RiskRadarTable';
+import { CommercialAndTrendsSection } from '../components/insights/CommercialAndTrendsSection';
 
 export const InsightsPage: React.FC = () => {
-  const { navigateToPage, selectAccountAndNavigate, sentimentBreakdown, overallSla, overallBestQm } = useFilters();
+  const { navigateToPage, filters } = useFilters();
+  const [data, setData] = useState<InsightsDiagnosticData | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const [timePeriod, setTimePeriod] = useState<InsightsTimePeriod>('12M');
+
+  const loadData = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const res = await getInsightsDiagnostic({
+        timePeriod,
+        vertical: filters.vertical !== 'ALL' ? filters.vertical : undefined,
+        qaLeader: filters.qaLeader !== 'ALL' ? filters.qaLeader : undefined,
+        srDirector: filters.srDirector !== 'ALL' ? filters.srDirector : undefined,
+        accountId: filters.account !== 'ALL' ? filters.account : undefined,
+        site: filters.site !== 'ALL' ? filters.site : undefined,
+        lob: filters.lob !== 'ALL' ? filters.lob : undefined,
+      });
+
+      setData(res.data);
+    } catch (err: any) {
+      console.error('Failed to load Insights diagnostic:', err);
+      setError(err?.message || 'Failed to load executive leadership insights');
+    } finally {
+      setLoading(false);
+    }
+  }, [timePeriod, filters]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  if (loading && !data) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 space-y-4 max-w-[1600px] mx-auto">
+        <div className="w-10 h-10 border-4 border-slate-200 border-t-sky-600 rounded-full animate-spin" />
+        <p className="text-sm font-semibold text-slate-700">
+          Synthesizing live executive radar and diagnostic metrics...
+        </p>
+        <span className="text-xs text-slate-400">
+          Reconciling live action points, attention ranks, and KPI signals
+        </span>
+      </div>
+    );
+  }
+
+  if (error && !data) {
+    return (
+      <div className="max-w-[1600px] mx-auto p-6 space-y-4">
+        <div className="bg-rose-50 border border-rose-200 rounded-lg p-6 text-center space-y-3">
+          <AlertCircle className="w-8 h-8 text-rose-600 mx-auto" />
+          <h2 className="text-base font-bold text-rose-900">
+            Failed to Load Leadership Insights
+          </h2>
+          <p className="text-xs text-rose-700 max-w-md mx-auto">{error}</p>
+          <button
+            type="button"
+            onClick={loadData}
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded transition-colors cursor-pointer"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Retry Connection</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!data) return null;
 
   return (
-    <div className="space-y-4 max-w-[1600px] mx-auto pb-10">
-      {/* Breadcrumb */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-200">
+    <div className="space-y-6 max-w-[1600px] mx-auto pb-12">
+      {/* Breadcrumb & Navigation Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200">
         <div className="flex items-center gap-2 text-xs text-slate-500">
           <button
+            type="button"
             onClick={() => navigateToPage('overview')}
-            className="text-slate-600 hover:text-slate-900 font-medium"
+            className="text-slate-600 hover:text-slate-900 font-medium cursor-pointer"
           >
             Enterprise
           </button>
-          <span>&gt;</span>
+          <span>/</span>
           <span className="font-bold text-slate-900">Leadership Insights & Executive Radar</span>
         </div>
 
-        <button
-          onClick={() => navigateToPage('overview')}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded hover:bg-slate-50 transition-colors cursor-pointer"
-        >
-          <ArrowLeft className="w-3.5 h-3.5" />
-          <span>Back to Overview</span>
-        </button>
-      </div>
-
-      {/* Strategic Summary Header */}
-      <div className="bg-white border border-slate-200 rounded-md p-4 shadow-xs">
-        <div className="flex items-start gap-3">
-          <div className="w-9 h-9 rounded bg-amber-500 flex items-center justify-center text-white shrink-0">
-            <Lightbulb className="w-5 h-5" />
-          </div>
-          <div>
-            <h1 className="text-base font-bold text-slate-900">
-              Executive QA Review & Strategic Synthesis
-            </h1>
-            <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">
-              Consolidated findings from the August 2026 Governance Cycle. Quality performance is fundamentally robust across FinTech, Retail, and Technology verticals, while Travel and Healthcare display concentrated operational volatility requiring targeted director interventions.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Grid of Key Insights */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {KEY_INSIGHTS_DATA.map((item) => (
-          <div
-            key={item.id}
-            className="bg-white border border-slate-200 rounded-md p-4 shadow-xs flex flex-col justify-between"
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={loadData}
+            disabled={loading}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded hover:bg-slate-50 transition-colors cursor-pointer shadow-xs disabled:opacity-50"
+            title="Refresh live data"
           >
-            <div>
-              <div className="flex items-center justify-between gap-2 pb-2 mb-2 border-b border-slate-100">
-                <span className="text-xs font-bold text-slate-900">{item.title}</span>
-                <span className="text-[10px] px-2 py-0.5 bg-slate-100 text-slate-700 font-semibold rounded font-mono">
-                  {item.tag}
-                </span>
-              </div>
-              <p className="text-xs text-slate-700 leading-relaxed">
-                {item.description}
-              </p>
-            </div>
+            <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${loading ? 'animate-spin' : ''}`} />
+            <span>Refresh</span>
+          </button>
 
-            <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-              <span>Impact: High Priority Strategic Focus</span>
-              <button
-                onClick={() => navigateToPage('overview')}
-                className="text-sky-700 font-semibold hover:underline flex items-center gap-0.5"
-              >
-                Inspect Data <ArrowRight className="w-3 h-3" />
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* 3 Pillar Strategic Action Plan */}
-      <div className="bg-white border border-slate-200 rounded-md p-4 shadow-xs">
-        <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-3">
-          Recommended Executive Action Plan (Q3/Q4 2026)
-        </h3>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div className="p-3 rounded border border-slate-200 bg-slate-50/60">
-            <div className="flex items-center gap-2 mb-1.5 font-bold text-xs text-slate-900">
-              <div className="w-5 h-5 rounded bg-sky-100 text-sky-700 flex items-center justify-center text-[10px]">1</div>
-              Travel Pod Hypercare
-            </div>
-            <p className="text-[11px] text-slate-600 leading-relaxed">
-              Deploy 4 senior float quality coaches to Manila Voice, institute daily 15-min baggage calibration scrums, and enforce automated transcript QA scoring.
-            </p>
-          </div>
-
-          <div className="p-3 rounded border border-slate-200 bg-slate-50/60">
-            <div className="flex items-center gap-2 mb-1.5 font-bold text-xs text-slate-900">
-              <div className="w-5 h-5 rounded bg-sky-100 text-sky-700 flex items-center justify-center text-[10px]">2</div>
-              Healthcare HIPAA Gate
-            </div>
-            <p className="text-[11px] text-slate-600 leading-relaxed">
-              Enforce 100% pre-call verification gates for high-risk member claim transactions on MediCare Direct to eliminate penalty exposure before month-end audit.
-            </p>
-          </div>
-
-          <div className="p-3 rounded border border-slate-200 bg-slate-50/60">
-            <div className="flex items-center gap-2 mb-1.5 font-bold text-xs text-slate-900">
-              <div className="w-5 h-5 rounded bg-sky-100 text-sky-700 flex items-center justify-center text-[10px]">3</div>
-              QAAS Automation Rollout
-            </div>
-            <p className="text-[11px] text-slate-600 leading-relaxed">
-              Scale the 14 active TAP automation pipelines across all Retail and FinTech accounts to expand billable QA margins toward the $1.8M full-year target.
-            </p>
-          </div>
+          <button
+            type="button"
+            onClick={() => navigateToPage('overview')}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded hover:bg-slate-50 transition-colors cursor-pointer shadow-xs"
+          >
+            <ArrowLeft className="w-3.5 h-3.5 text-slate-500" />
+            <span>Executive Overview</span>
+          </button>
         </div>
       </div>
+
+      {/* 1. Executive Synthesis & Governance Radar Header */}
+      <ExecutiveSynthesisHeader
+        data={data}
+        timePeriod={timePeriod}
+        onTimePeriodChange={(tp) => setTimePeriod(tp)}
+      />
+
+      {/* 2. Priority Insights Section (Top Attention Accounts) */}
+      <PriorityInsightsSection cards={data.priorityInsights} />
+
+      {/* 3. Systemic Portfolio Themes (Cross-Account Defect Concentrations) */}
+      <CrossPortfolioThemesSection themes={data.crossPortfolioThemes} />
+
+      {/* 4. Positive Signals & Achievements */}
+      <PositiveSignalsSection signals={data.positiveSignals} />
+
+      {/* 5. Enterprise Risk Radar Register (Searchable, filterable, paginated) */}
+      <RiskRadarTable rows={data.riskRadarRows} />
+
+      {/* 6. Multi-Period Core Trajectories & Commercial Context */}
+      <CommercialAndTrendsSection
+        currentCommercial={data.currentCommercialContext}
+        periodCommercial={data.selectedPeriodCommercialContext}
+        periodTrends={data.periodTrends}
+        timePeriod={timePeriod}
+      />
     </div>
   );
 };

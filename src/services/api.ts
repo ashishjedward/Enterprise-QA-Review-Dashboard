@@ -17,6 +17,8 @@ import {
   ActionsDiagnosticResponse,
   ActionsTimePeriod,
   ValueAddsDiagnosticResponse,
+  InsightsDiagnosticResponse,
+  InsightsTimePeriod,
 } from '../types/api';
 
 class ApiError extends Error {
@@ -432,5 +434,52 @@ export async function getValueAddsDiagnostic(
 
 // Alias for convenience
 export const fetchValueAddsDiagnostic = getValueAddsDiagnostic;
+
+/**
+ * Fetches comprehensive Leadership Insights & Executive Radar Diagnostic data across scoped accounts.
+ */
+export async function getInsightsDiagnostic(
+  filters?: DashboardScopeFilters & { timePeriod?: string; account?: string }
+): Promise<InsightsDiagnosticResponse> {
+  const params = new URLSearchParams();
+  if (filters) {
+    if (filters.timePeriod && filters.timePeriod !== 'ALL') {
+      params.set('timePeriod', filters.timePeriod);
+    }
+    if (filters.vertical && filters.vertical !== 'ALL') {
+      params.set('vertical', filters.vertical);
+    }
+    if (filters.qaLeader && filters.qaLeader !== 'ALL') {
+      params.set('qaLeader', filters.qaLeader);
+    }
+    if (filters.srDirector && filters.srDirector !== 'ALL') {
+      params.set('srDirector', filters.srDirector);
+    }
+    const accId = filters.accountId || filters.account;
+    if (accId && accId !== 'ALL') {
+      params.set('accountId', accId);
+    }
+    if (filters.site && filters.site !== 'ALL') {
+      params.set('site', filters.site);
+    }
+    if (filters.lob && filters.lob !== 'ALL') {
+      params.set('lob', filters.lob);
+    }
+  }
+
+  const query = params.toString();
+  const url = query ? `/api/insights-diagnostic?${query}` : '/api/insights-diagnostic';
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      Accept: 'application/json',
+    },
+  });
+  return handleResponse<InsightsDiagnosticResponse>(response);
+}
+
+// Alias for convenience
+export const fetchInsightsDiagnostic = getInsightsDiagnostic;
 
 export { ApiError };

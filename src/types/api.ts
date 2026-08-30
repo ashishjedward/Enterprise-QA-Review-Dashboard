@@ -1435,6 +1435,201 @@ export interface ValueAddsDiagnosticResponse {
   data: ValueAddsDiagnosticData;
 }
 
+export type InsightsTimePeriod = '3M' | '6M' | 'YTD' | '12M';
+export type InsightsAttentionBand = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'WATCH';
+export type InsightsEvidenceStatus = 'Red' | 'Amber' | 'Green' | 'Neutral';
+export type InsightsActivePageToken =
+  | 'overview'
+  | 'process-health'
+  | 'value-adds'
+  | 'hygiene-inputs'
+  | 'qa-team'
+  | 'actions'
+  | 'insights'
+  | 'reports'
+  | 'sla-detail'
+  | 'best-qm-detail'
+  | 'account-diagnostic';
+
+export interface InsightEvidenceItem {
+  metricId?: string;
+  label: string;
+  actual: string | number;
+  target?: string | number | null;
+  status: InsightsEvidenceStatus;
+  detail?: string;
+  navigationTarget?: InsightsActivePageToken;
+}
+
+export interface PriorityInsightCard {
+  id: string;
+  accountId: string;
+  accountName: string;
+  vertical: string;
+  qaLeader: string;
+  srDirector: string;
+  site: string;
+  lob: string;
+  priority: InsightsAttentionBand;
+  attentionScore: number;
+  attentionRank: number;
+  primaryDriver: string;
+  headline: string;
+  summary: string;
+  evidence: InsightEvidenceItem[];
+  recommendedAction: string;
+  navigationTarget: {
+    page: InsightsActivePageToken;
+    accountId?: string;
+  };
+}
+
+export interface CrossPortfolioTheme {
+  themeId: string;
+  category: string;
+  title: string;
+  affectedAccountCount: number;
+  totalApplicableAccounts: number;
+  affectedAccountPct: number;
+  summary: string;
+  topAccounts: Array<{
+    accountId: string;
+    accountName: string;
+    actual: string;
+    rag: string;
+  }>;
+  navigationTarget: {
+    page: InsightsActivePageToken;
+  };
+}
+
+export interface PositiveSignalItem {
+  id: string;
+  accountId?: string;
+  accountName?: string;
+  title: string;
+  metricLabel: string;
+  achievementValue: string;
+  summary: string;
+  navigationTarget?: {
+    page: InsightsActivePageToken;
+    accountId?: string;
+  };
+}
+
+export interface RiskRadarRow {
+  accountId: string;
+  accountName: string;
+  vertical: string;
+  qaLeader: string;
+  srDirector: string;
+  site: string;
+  lob: string;
+  attentionRank: number;
+  attentionScore: number;
+  attentionBand: InsightsAttentionBand;
+  primaryDriver: string;
+  redKpiCount: number;
+  redKpis: string[];
+  clientSentiment: number | null;
+  clientSentimentRag: 'Red' | 'Amber' | 'Green' | 'N/A';
+  openEscalations: number;
+  highCriticalEscalations: number;
+  openZt: number;
+  openCqm: number;
+  openActions: number;
+  overdueActions: number;
+  highCriticalActions: number;
+  activeTapAtRisk: number;
+}
+
+export interface PeriodTrendPoint {
+  month: string;
+  actualValue: number | null;
+  actualDisplay: string | null;
+  rag: string | null;
+}
+
+export interface PeriodTrendItem {
+  metricId: string;
+  metricName: string;
+  scale: string;
+  higherIsBetter: boolean;
+  startMonth: string;
+  endMonth: string;
+  startValue: number | null;
+  startDisplay: string | null;
+  endValue: number | null;
+  endDisplay: string | null;
+  delta: number | null;
+  deltaDisplay: string;
+  isFavourable: boolean | null;
+  startRag: string | null;
+  endRag: string | null;
+  points: PeriodTrendPoint[];
+  navigationTarget?: InsightsActivePageToken;
+}
+
+export interface CommercialContextData {
+  timePeriodLabel: string;
+  penaltyExposure: number;
+  penaltyPaid: number;
+  rewardOpportunity: number;
+  rewardEarned: number;
+  netCommercialImpact: number;
+}
+
+export interface InsightsDiagnosticData {
+  reportingContext: {
+    reportingMonth: string;
+    latestClosedMonth: string;
+    latestAvailableMonth: string;
+    currentOpenMonth: string;
+    currentSubmissionDeadline: string;
+    dataAsOfDate: string;
+    businessTimezone: string;
+    totalMonitoredAccounts: number;
+    timePeriod: string;
+  };
+  scopeSummary: {
+    totalAccountsInScope: number;
+    criticalAttentionCount: number;
+    highAttentionCount: number;
+    mediumAttentionCount: number;
+    watchAttentionCount: number;
+    accountsWithRedKpi: number;
+    redSentimentCount: number;
+    amberSentimentCount: number;
+    greenSentimentCount: number;
+    openEscalationCount: number;
+    highCriticalEscalationCount: number;
+    openZtCount: number;
+    openCqmCount: number;
+    openActionCount: number;
+    overdueActionCount: number;
+    highCriticalActionCount: number;
+    activeTapAtRiskCount: number;
+    actionClosureRate: number | null;
+    actionClosureRateDisplay: string;
+  };
+  executiveSynthesis: {
+    leadSummary: string;
+    keyObservations: string[];
+    governanceStatus: 'CRITICAL' | 'ATTENTION' | 'STABLE' | 'HEALTHY';
+  };
+  priorityInsights: PriorityInsightCard[];
+  crossPortfolioThemes: CrossPortfolioTheme[];
+  positiveSignals: PositiveSignalItem[];
+  riskRadarRows: RiskRadarRow[];
+  periodTrends: PeriodTrendItem[];
+  currentCommercialContext: CommercialContextData;
+  selectedPeriodCommercialContext: CommercialContextData;
+}
+
+export interface InsightsDiagnosticResponse {
+  data: InsightsDiagnosticData;
+}
+
 
 
 

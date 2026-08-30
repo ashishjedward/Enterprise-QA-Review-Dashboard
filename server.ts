@@ -11,6 +11,7 @@ import { fetchHygieneDiagnostic } from './server/hygieneDiagnostic';
 import { fetchQaTeamDiagnostic } from './server/qaTeamDiagnostic';
 import { fetchActionsDiagnostic } from './server/actionsDiagnostic';
 import { fetchValueAddsDiagnostic } from './server/valueAddsDiagnostic';
+import { fetchInsightsDiagnostic } from './server/insightsDiagnostic';
 
 const PORT = 3000;
 
@@ -468,6 +469,51 @@ async function startServer() {
       });
     }
   });
+
+  // ----------------------------------------------------
+  // ENDPOINT 11: GET /api/insights-diagnostic (also /api/insights/diagnostic)
+  // Supports optional query parameters: timePeriod, vertical, qaLeader, srDirector, accountId, site, lob
+  // Fully parameterized queries against BigQuery semantic views
+  // ----------------------------------------------------
+  const handleInsightsDiagnostic = async (req: express.Request, res: express.Response) => {
+    try {
+      const timePeriodQuery = typeof req.query.timePeriod === 'string' ? req.query.timePeriod : undefined;
+      const validTimePeriods = ['3M', '6M', 'YTD', '12M'];
+      if (timePeriodQuery && !validTimePeriods.includes(timePeriodQuery)) {
+        return res.status(400).json({
+          error: {
+            message: `Invalid timePeriod: ${timePeriodQuery}. Allowed values: 3M, 6M, YTD, 12M`,
+          },
+        });
+      }
+
+      const filters = {
+        timePeriod: timePeriodQuery,
+        vertical: typeof req.query.vertical === 'string' ? req.query.vertical : undefined,
+        qaLeader: typeof req.query.qaLeader === 'string' ? req.query.qaLeader : undefined,
+        srDirector: typeof req.query.srDirector === 'string' ? req.query.srDirector : undefined,
+        accountId: typeof req.query.accountId === 'string' ? req.query.accountId : undefined,
+        site: typeof req.query.site === 'string' ? req.query.site : undefined,
+        lob: typeof req.query.lob === 'string' ? req.query.lob : undefined,
+      };
+
+      const data = await fetchInsightsDiagnostic(filters);
+      return res.status(200).json({
+        data,
+      });
+    } catch (err: unknown) {
+      const errMsg = (err as Error)?.message || 'Unable to load Insights diagnostic data';
+      console.error('Failed to query Insights diagnostic:', errMsg);
+      return res.status(500).json({
+        error: {
+          message: 'Unable to load Insights diagnostic data',
+        },
+      });
+    }
+  };
+
+  app.get('/api/insights-diagnostic', handleInsightsDiagnostic);
+  app.get('/api/insights/diagnostic', handleInsightsDiagnostic);
 
   // ----------------------------------------------------
   // Vite Middleware / Static Serving
