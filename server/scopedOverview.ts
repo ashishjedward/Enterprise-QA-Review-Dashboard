@@ -181,6 +181,88 @@ function getSupplementalQuery(projectId: string, dataset: string, whereClause: s
           )
         ) AS Closure_Rate
       FROM action_base
+    ),
+    qaas_calc AS (
+      SELECT
+        COUNT(*) AS QAAS_Record_Count,
+        COUNTIF(q.Is_Open = TRUE) AS QAAS_Open_Opportunities,
+
+        SUM(q.Target_Value) AS QAAS_Target_Value,
+        SUM(q.Revenue_Value) AS QAAS_Program_Value,
+
+        SAFE_DIVIDE(
+          SUM(q.Revenue_Value),
+          SUM(q.Target_Value)
+        ) AS QAAS_Value_Achievement_Pct,
+
+        SUM(
+          CASE WHEN q.Is_Open = TRUE
+          THEN q.Target_Value
+          ELSE NULL END
+        ) AS QAAS_Open_Target_Value,
+
+        SUM(
+          CASE WHEN q.Is_Open = TRUE
+          THEN q.Revenue_Value
+          ELSE NULL END
+        ) AS QAAS_Open_Opportunity_Value
+
+      FROM \`${projectId}.${dataset}.vw_qaas_revenue\` q
+      JOIN scoped_accounts acc
+        ON q.Account_ID = acc.Account_ID
+    ),
+    tap_base AS (
+      SELECT
+        t.*,
+        CASE
+          WHEN t.Actual_Start_Date > CURRENT_DATE('${BUSINESS_TIMEZONE}')
+            THEN 'PLANNED'
+          WHEN t.Actual_Start_Date <= CURRENT_DATE('${BUSINESS_TIMEZONE}')
+            AND (
+              t.Actual_End_Date IS NULL
+              OR t.Actual_End_Date > CURRENT_DATE('${BUSINESS_TIMEZONE}')
+            )
+            THEN 'ACTIVE'
+          WHEN t.Actual_End_Date IS NOT NULL
+            AND t.Actual_End_Date <= CURRENT_DATE('${BUSINESS_TIMEZONE}')
+            THEN 'CLOSED'
+          ELSE 'UNKNOWN'
+        END AS As_Of_Today_Status
+      FROM \`${projectId}.${dataset}.vw_tap_summary\` t
+      JOIN scoped_accounts acc
+        ON t.Account_ID = acc.Account_ID
+    ),
+    tap_calc AS (
+      SELECT
+        COUNT(*) AS TAP_Total_Projects,
+
+        COUNTIF(
+          As_Of_Today_Status = 'ACTIVE'
+        ) AS TAP_Active_Projects_Current,
+
+        COUNTIF(
+          As_Of_Today_Status = 'ACTIVE'
+          AND Is_At_Risk = TRUE
+        ) AS TAP_Active_At_Risk_Current,
+
+        COUNTIF(
+          As_Of_Today_Status = 'CLOSED'
+        ) AS TAP_Closed_Projects_Current,
+
+        COUNTIF(
+          As_Of_Today_Status = 'PLANNED'
+        ) AS TAP_Planned_Projects_Current,
+
+        SUM(Target_Benefit) AS TAP_Target_Benefit_Current,
+
+        SUM(Realized_Benefit) AS TAP_Recorded_Benefit,
+
+        SAFE_DIVIDE(
+          SUM(Realized_Benefit),
+          SUM(Target_Benefit)
+        ) AS TAP_Portfolio_Realization_Pct
+
+      FROM tap_base
     )
     SELECT
       -- TNI
@@ -219,11 +301,31 @@ function getSupplementalQuery(projectId: string, dataset: string, whereClause: s
         ELSE FORMAT('%.1f%%', act.Closure_Rate * 100)
       END AS Closure_Rate_Display,
       CAST(NULL AS FLOAT64) AS Closure_Rate_Target,
-      CAST(NULL AS STRING) AS Closure_Rate_RAG
+      CAST(NULL AS STRING) AS Closure_Rate_RAG,
+
+      -- Value Adds Snapshot
+      q.QAAS_Record_Count,
+      q.QAAS_Open_Opportunities,
+      q.QAAS_Target_Value,
+      q.QAAS_Program_Value,
+      q.QAAS_Value_Achievement_Pct,
+      q.QAAS_Open_Target_Value,
+      q.QAAS_Open_Opportunity_Value,
+
+      tap.TAP_Total_Projects,
+      tap.TAP_Active_Projects_Current AS TAP_Active_Projects,
+      tap.TAP_Active_At_Risk_Current AS TAP_Active_At_Risk,
+      tap.TAP_Closed_Projects_Current AS TAP_Closed_Projects,
+      tap.TAP_Planned_Projects_Current AS TAP_Planned_Projects,
+      tap.TAP_Target_Benefit_Current AS TAP_Target_Benefit,
+      tap.TAP_Recorded_Benefit,
+      tap.TAP_Portfolio_Realization_Pct
     FROM tni_calc t
     CROSS JOIN mro_calc m
     CROSS JOIN ideas_calc i
     CROSS JOIN action_calc act
+    CROSS JOIN qaas_calc q
+    CROSS JOIN tap_calc tap
   `;
 }
 
@@ -258,6 +360,24 @@ function parseSupplementalRow(row: Record<string, unknown> | undefined) {
         Closure_Rate_Target: null,
         Closure_Rate_RAG: null,
       },
+      Value_Adds_Snapshot: {
+        QAAS_Record_Count: 0,
+        QAAS_Open_Opportunities: 0,
+        QAAS_Target_Value: null,
+        QAAS_Program_Value: null,
+        QAAS_Value_Achievement_Pct: null,
+        QAAS_Open_Target_Value: null,
+        QAAS_Open_Opportunity_Value: null,
+
+        TAP_Total_Projects: 0,
+        TAP_Active_Projects: 0,
+        TAP_Active_At_Risk: 0,
+        TAP_Closed_Projects: 0,
+        TAP_Planned_Projects: 0,
+        TAP_Target_Benefit: null,
+        TAP_Recorded_Benefit: null,
+        TAP_Portfolio_Realization_Pct: null,
+      },
     };
   }
 
@@ -291,6 +411,24 @@ function parseSupplementalRow(row: Record<string, unknown> | undefined) {
       Closure_Rate_Display: (row.Closure_Rate_Display as string) || null,
       Closure_Rate_Target: row.Closure_Rate_Target !== null && row.Closure_Rate_Target !== undefined ? Number(row.Closure_Rate_Target) : null,
       Closure_Rate_RAG: (row.Closure_Rate_RAG as string) || null,
+    },
+    Value_Adds_Snapshot: {
+      QAAS_Record_Count: Number(row.QAAS_Record_Count ?? 0),
+      QAAS_Open_Opportunities: Number(row.QAAS_Open_Opportunities ?? 0),
+      QAAS_Target_Value: row.QAAS_Target_Value !== null && row.QAAS_Target_Value !== undefined ? Number(row.QAAS_Target_Value) : null,
+      QAAS_Program_Value: row.QAAS_Program_Value !== null && row.QAAS_Program_Value !== undefined ? Number(row.QAAS_Program_Value) : null,
+      QAAS_Value_Achievement_Pct: row.QAAS_Value_Achievement_Pct !== null && row.QAAS_Value_Achievement_Pct !== undefined ? Number(row.QAAS_Value_Achievement_Pct) : null,
+      QAAS_Open_Target_Value: row.QAAS_Open_Target_Value !== null && row.QAAS_Open_Target_Value !== undefined ? Number(row.QAAS_Open_Target_Value) : null,
+      QAAS_Open_Opportunity_Value: row.QAAS_Open_Opportunity_Value !== null && row.QAAS_Open_Opportunity_Value !== undefined ? Number(row.QAAS_Open_Opportunity_Value) : null,
+
+      TAP_Total_Projects: Number(row.TAP_Total_Projects ?? 0),
+      TAP_Active_Projects: Number(row.TAP_Active_Projects ?? 0),
+      TAP_Active_At_Risk: Number(row.TAP_Active_At_Risk ?? 0),
+      TAP_Closed_Projects: Number(row.TAP_Closed_Projects ?? 0),
+      TAP_Planned_Projects: Number(row.TAP_Planned_Projects ?? 0),
+      TAP_Target_Benefit: row.TAP_Target_Benefit !== null && row.TAP_Target_Benefit !== undefined ? Number(row.TAP_Target_Benefit) : null,
+      TAP_Recorded_Benefit: row.TAP_Recorded_Benefit !== null && row.TAP_Recorded_Benefit !== undefined ? Number(row.TAP_Recorded_Benefit) : null,
+      TAP_Portfolio_Realization_Pct: row.TAP_Portfolio_Realization_Pct !== null && row.TAP_Portfolio_Realization_Pct !== undefined ? Number(row.TAP_Portfolio_Realization_Pct) : null,
     },
   };
 }
@@ -361,6 +499,7 @@ export async function fetchScopedDashboardOverview(filters: ScopeFilters) {
     serialized.High_Critical_Actions = suppData.Action_Snapshot.High_Critical_Actions;
     serialized.Hygiene_Supplemental = suppData.Hygiene_Supplemental;
     serialized.Action_Snapshot = suppData.Action_Snapshot;
+    serialized.Value_Adds_Snapshot = suppData.Value_Adds_Snapshot;
 
     return serialized;
   }
@@ -778,5 +917,6 @@ export async function fetchScopedDashboardOverview(filters: ScopeFilters) {
     Top_Attention_Accounts: topAtt,
     Hygiene_Supplemental: suppData.Hygiene_Supplemental,
     Action_Snapshot: suppData.Action_Snapshot,
+    Value_Adds_Snapshot: suppData.Value_Adds_Snapshot,
   };
 }

@@ -1,86 +1,89 @@
 import React from 'react';
 import { TrendingUp, Zap } from 'lucide-react';
-import { StatusBadge } from '../common/StatusBadge';
 import { useFilters } from '../../context/FilterContext';
 import { useDashboardData } from '../../context/DashboardDataContext';
-import { RAGStatus } from '../../types';
+
+function formatCompactValue(val: number | null | undefined): string {
+  if (val === null || val === undefined || isNaN(val)) return '—';
+  const abs = Math.abs(val);
+  if (abs >= 1000000) {
+    return `${(val / 1000000).toFixed(2)}M`;
+  }
+  if (abs >= 1000) {
+    return `${(val / 1000).toFixed(1)}K`;
+  }
+  return val.toLocaleString();
+}
 
 export const ValueAddsSection: React.FC = () => {
   const { navigateToPage } = useFilters();
   const { overview } = useDashboardData();
 
-  const kpis = overview?.KPI_Cards || [];
-  const m011 = kpis.find((k) => k.Metric_ID === 'M011');
-  const m012 = kpis.find((k) => k.Metric_ID === 'M012');
+  const va = overview?.Value_Adds_Snapshot;
 
-  const billedRevenue = overview?.Billed_Revenue !== null && overview?.Billed_Revenue !== undefined
-    ? `${(Number(overview.Billed_Revenue) / 1000000).toFixed(2)}M`
-    : 'N/A';
-  const planRevenue = overview?.Plan_Revenue !== null && overview?.Plan_Revenue !== undefined
-    ? `${(Number(overview.Plan_Revenue) / 1000000).toFixed(2)}M`
-    : 'N/A';
-  const revPct = overview?.Revenue_Achievement_Pct !== null && overview?.Revenue_Achievement_Pct !== undefined
-    ? Math.round(Number(overview.Revenue_Achievement_Pct) * 100)
+  // Panel 1: QaaS Program Value
+  const qaasProgramVal = formatCompactValue(va?.QAAS_Program_Value);
+  const qaasTargetVal = formatCompactValue(va?.QAAS_Target_Value);
+  const qaasAchPct = va?.QAAS_Value_Achievement_Pct !== null && va?.QAAS_Value_Achievement_Pct !== undefined
+    ? `${(va.QAAS_Value_Achievement_Pct * 100).toFixed(1)}% achievement`
+    : 'Target Tracking';
+  const qaasProgress = va?.QAAS_Value_Achievement_Pct !== null && va?.QAAS_Value_Achievement_Pct !== undefined
+    ? Math.min(Math.round(va.QAAS_Value_Achievement_Pct * 100), 100)
     : 0;
-  const revRag = (revPct >= 100 ? 'GREEN' : revPct >= 90 ? 'AMBER' : 'RED') as RAGStatus;
 
-  const getTargetDisplay = (kpi?: { Target_Display?: string | null; Target_Value?: number | null }, isPct = true) => {
-    if (kpi?.Target_Display) return kpi.Target_Display;
-    if (kpi?.Target_Value !== null && kpi?.Target_Value !== undefined) {
-      return isPct ? `${(kpi.Target_Value * 100).toFixed(1)}%` : kpi.Target_Value.toFixed(1);
-    }
-    return 'N/A';
-  };
+  // Panel 2: Active TAP Projects
+  const tapActive = va?.TAP_Active_Projects ?? 0;
+  const tapAtRisk = va?.TAP_Active_At_Risk ?? 0;
+  const tapTotal = va?.TAP_Total_Projects ?? 0;
+  const tapClosed = va?.TAP_Closed_Projects ?? 0;
+  const tapPlanned = va?.TAP_Planned_Projects ?? 0;
+  const tapActiveProgress = tapTotal > 0
+    ? Math.min(Math.round((tapActive / tapTotal) * 100), 100)
+    : 0;
 
-  const qaUtilValue = m011?.Actual_Display || (m011?.Actual_Value !== null && m011?.Actual_Value !== undefined ? `${(m011.Actual_Value * 100).toFixed(1)}%` : 'N/A');
-  const qaUtilTarget = getTargetDisplay(m011, true);
-  const qaUtilRag = (m011?.RAG?.toUpperCase() as RAGStatus) || ('Normal' as any);
-  const qaUtilProgress = m011?.Actual_Value && m011?.Target_Value ? Math.min(Math.round((m011.Actual_Value / m011.Target_Value) * 100), 100) : 0;
-
-  const attritionValue = m012?.Actual_Display || (m012?.Actual_Value !== null && m012?.Actual_Value !== undefined ? `${(m012.Actual_Value * 100).toFixed(1)}%` : 'N/A');
-  const attritionTarget = m012?.Target_Display ? `< ${m012.Target_Display}` : (m012?.Target_Value !== null && m012?.Target_Value !== undefined ? `< ${(m012.Target_Value * 100).toFixed(1)}%` : 'N/A');
-  const attritionRag = (m012?.RAG?.toUpperCase() as RAGStatus) || ('Normal' as any);
+  // Panel 3: TAP Recorded Benefit
+  const tapRecBenefit = formatCompactValue(va?.TAP_Recorded_Benefit);
+  const tapTgtBenefit = formatCompactValue(va?.TAP_Target_Benefit);
+  const tapRealPct = va?.TAP_Portfolio_Realization_Pct !== null && va?.TAP_Portfolio_Realization_Pct !== undefined
+    ? `${(va.TAP_Portfolio_Realization_Pct * 100).toFixed(1)}% of target`
+    : 'Target Tracking';
+  const tapBenefitProgress = va?.TAP_Portfolio_Realization_Pct !== null && va?.TAP_Portfolio_Realization_Pct !== undefined
+    ? Math.min(Math.round(va.TAP_Portfolio_Realization_Pct * 100), 100)
+    : 0;
 
   const valueItems = [
     {
-      metric: 'QA Monetization & Revenue',
-      currentValue: billedRevenue,
-      subContext: `${revPct}% Achieved`,
-      rag: revRag,
-      actualLabel: 'Billed Revenue:',
-      actualValue: billedRevenue,
-      targetLabel: 'Plan Target:',
-      targetValue: planRevenue,
-      progressPercent: revPct,
+      metric: 'QaaS Program Value',
+      currentValue: qaasProgramVal,
+      subContext: qaasAchPct,
+      actualLabel: 'Program Value:',
+      actualValue: qaasProgramVal,
+      targetLabel: 'Target Value:',
+      targetValue: qaasTargetVal,
+      progressPercent: qaasProgress,
     },
     {
-      metric: 'Billed QA Resource Utilization',
-      currentValue: qaUtilValue,
-      subContext: m011?.Favourable_Variance != null ? `${m011.Favourable_Variance >= 0 ? '+' : ''}${(m011.Favourable_Variance * 100).toFixed(1)}% vs Tgt` : 'Target Tracking',
-      rag: qaUtilRag,
-      actualLabel: 'Actual Util:',
-      actualValue: qaUtilValue,
-      targetLabel: 'Target:',
-      targetValue: qaUtilTarget,
-      progressPercent: qaUtilProgress,
+      metric: 'Active TAP Projects',
+      currentValue: `${tapActive}`,
+      subContext: `${tapAtRisk} at risk`,
+      subContextWarning: tapAtRisk > 0,
+      actualLabel: 'Portfolio Total:',
+      actualValue: `${tapTotal}`,
+      targetLabel: 'Closed / Planned:',
+      targetValue: `${tapClosed} / ${tapPlanned}`,
+      progressPercent: tapActiveProgress,
     },
     {
-      metric: 'QA Talent Retention / Attrition',
-      currentValue: attritionValue,
-      subContext: m012?.Favourable_Variance != null ? `${m012.Favourable_Variance >= 0 ? '-' : '+'}${(Math.abs(m012.Favourable_Variance) * 100).toFixed(1)}% vs Tgt` : 'Target Tracking',
-      rag: attritionRag,
-      actualLabel: 'Actual Attrition:',
-      actualValue: attritionValue,
-      targetLabel: 'Target Ceiling:',
-      targetValue: attritionTarget,
-      progressPercent: m012?.Actual_Value !== null && m012?.Actual_Value !== undefined ? Math.min(Math.round(m012.Actual_Value * 100), 100) : 0,
+      metric: 'TAP Recorded Benefit',
+      currentValue: tapRecBenefit,
+      subContext: tapRealPct,
+      actualLabel: 'Recorded Benefit:',
+      actualValue: tapRecBenefit,
+      targetLabel: 'Target Benefit:',
+      targetValue: tapTgtBenefit,
+      progressPercent: tapBenefitProgress,
     },
   ];
-
-  const tapActive = Number(overview?.TAP_Active_Projects ?? 0);
-  const tapBenefit = overview?.TAP_Realized_Benefit !== null && overview?.TAP_Realized_Benefit !== undefined 
-    ? `${(Number(overview.TAP_Realized_Benefit) / 1000000).toFixed(2)}M` 
-    : null;
 
   return (
     <div className="bg-surface border border-border-default rounded shadow-elevation-1 p-3 sm:p-4 flex flex-col justify-between h-full">
@@ -92,11 +95,11 @@ export const ValueAddsSection: React.FC = () => {
               <TrendingUp className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-label text-navy-900 tracking-tight uppercase">
+              <h2 className="text-label text-navy-900 tracking-tight uppercase font-bold">
                 Value-adds & Transformation
               </h2>
               <p className="text-caption text-slate-500 hidden sm:block">
-                QAAS revenue monetization, billed QA utilization & automation delivery.
+                QaaS opportunity value, transformation portfolio and recorded benefit.
               </p>
             </div>
           </div>
@@ -117,18 +120,19 @@ export const ValueAddsSection: React.FC = () => {
             >
               <div>
                 <div className="flex items-start justify-between gap-1 mb-1 min-h-[22px]">
-                  <span className="text-label text-navy-900 line-clamp-2 leading-tight">
+                  <span className="text-label text-navy-900 line-clamp-2 leading-tight font-semibold">
                     {item.metric}
                   </span>
-                  <div className="shrink-0">
-                    <StatusBadge status={item.rag} size="xs" />
-                  </div>
                 </div>
                 <div className="flex items-baseline justify-between mt-2">
-                  <span className="text-metric-sm text-navy-900 tnum">
+                  <span className="text-metric-sm text-navy-900 tnum font-bold">
                     {item.currentValue}
                   </span>
-                  <span className="text-caption font-semibold text-slate-500 flex items-center tnum">
+                  <span
+                    className={`text-caption font-semibold flex items-center tnum ${
+                      item.subContextWarning ? 'text-amber-700 font-bold' : 'text-slate-500'
+                    }`}
+                  >
                     {item.subContext}
                   </span>
                 </div>
@@ -156,15 +160,22 @@ export const ValueAddsSection: React.FC = () => {
         </div>
       </div>
 
-      {/* Brief Value Statement */}
-      <div className="mt-2 pt-2 border-t border-border-subtle flex items-center justify-between text-caption text-slate-500">
+      {/* Brief Value Statement / Pipeline Context */}
+      <div className="mt-2 pt-2 border-t border-border-subtle flex flex-col sm:flex-row items-start sm:items-center justify-between text-caption text-slate-500 gap-1 sm:gap-0">
         <div className="flex items-center gap-1.5">
-          <Zap className="w-4 h-4 text-amber-500" />
+          <Zap className="w-4 h-4 text-amber-500 shrink-0" />
           <span className="text-caption">
-            {tapActive} Active Transformation & Automation projects{tapBenefit ? ` (${tapBenefit} realized)` : ''}
+            QaaS Open Pipeline: <strong className="text-navy-900 font-semibold">{va?.QAAS_Open_Opportunities ?? 0}</strong> opportunities
+            {va?.QAAS_Open_Opportunity_Value != null && va.QAAS_Open_Opportunity_Value > 0 && (
+              <span className="text-slate-500">
+                {' '}• <strong className="text-navy-900 font-semibold">{formatCompactValue(va.QAAS_Open_Opportunity_Value)}</strong> opportunity value
+              </span>
+            )}
           </span>
         </div>
-        <span className="text-caption text-status-green-text font-bold tnum">{revPct}% Achieved</span>
+        <span className="text-caption text-slate-400 italic">
+          Modeled value; no currency metadata.
+        </span>
       </div>
     </div>
   );

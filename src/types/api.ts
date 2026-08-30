@@ -115,6 +115,25 @@ export interface ActionSnapshot {
   Closure_Rate_RAG: string | null;
 }
 
+export interface ValueAddsSnapshot {
+  QAAS_Record_Count: number;
+  QAAS_Open_Opportunities: number;
+  QAAS_Target_Value: number | null;
+  QAAS_Program_Value: number | null;
+  QAAS_Value_Achievement_Pct: number | null;
+  QAAS_Open_Target_Value: number | null;
+  QAAS_Open_Opportunity_Value: number | null;
+
+  TAP_Total_Projects: number;
+  TAP_Active_Projects: number;
+  TAP_Active_At_Risk: number;
+  TAP_Closed_Projects: number;
+  TAP_Planned_Projects: number;
+  TAP_Target_Benefit: number | null;
+  TAP_Recorded_Benefit: number | null;
+  TAP_Portfolio_Realization_Pct: number | null;
+}
+
 export interface DashboardOverviewData {
   Total_Accounts: number;
   DBU_Accounts: number;
@@ -127,6 +146,7 @@ export interface DashboardOverviewData {
   Top_Attention_Accounts: TopAttentionAccount[];
   Hygiene_Supplemental?: HygieneSupplemental;
   Action_Snapshot?: ActionSnapshot;
+  Value_Adds_Snapshot?: ValueAddsSnapshot;
   Client_Sentiment_Red_Accounts?: number;
   Client_Sentiment_Amber_Accounts?: number;
   Client_Sentiment_Green_Accounts?: number;
