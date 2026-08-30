@@ -21,7 +21,7 @@ export const ActionSnapshotSection: React.FC = () => {
   const closureRateTarget = actionSnapshot?.Closure_Rate_Target;
   const closureContext = closureRateTarget !== null && closureRateTarget !== undefined
     ? `Target: ${(closureRateTarget * 100).toFixed(1)}%`
-    : 'Across active portfolio';
+    : 'Matured action commitments';
 
   return (
     <div className="bg-surface border border-border-default rounded shadow-elevation-1 p-3 sm:p-4">
@@ -36,7 +36,7 @@ export const ActionSnapshotSection: React.FC = () => {
               Action & Governance Snapshot
             </h2>
             <p className="text-caption text-slate-500 hidden sm:block">
-              Audit CAPA tracking, defect remediation, and closure velocity.
+              Current action backlog, due-date risk, and closure progress.
             </p>
           </div>
         </div>
@@ -58,7 +58,7 @@ export const ActionSnapshotSection: React.FC = () => {
         <MetricTile
           title="OPEN ACTIONS"
           value={openCount}
-          context="Across active portfolio"
+          context="Current active backlog"
           status="Open"
           onClick={() => navigateToPage('actions')}
           className="h-full"
@@ -68,18 +68,18 @@ export const ActionSnapshotSection: React.FC = () => {
         <MetricTile
           title="OVERDUE"
           value={overdueCount}
-          context="Target SLA breached"
+          context="Past due date"
           status="Overdue"
           isRedHighlight={overdueCount > 0}
           onClick={() => navigateToPage('actions')}
           className="h-full"
         />
 
-        {/* 3. Due 7 Days */}
+        {/* 3. Due Next 7 Days */}
         <MetricTile
-          title="DUE 7 DAYS"
+          title="DUE NEXT 7 DAYS"
           value={dueNext7Count}
-          context="Pending signoff"
+          context="Due within 7 days"
           status="Due Soon"
           onClick={() => navigateToPage('actions')}
           className="h-full"

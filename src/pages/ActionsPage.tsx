@@ -370,12 +370,12 @@ export const ActionsPage: React.FC = () => {
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold">Total Backlog</span>
+                <span className="text-[11px] font-semibold">OPEN ACTIONS</span>
                 <ListChecks className="w-3.5 h-3.5 opacity-60" />
               </div>
               <div className="text-2xl font-black font-mono mt-1">{backlog?.openActions ?? 0}</div>
               <div className="text-[10px] opacity-75 mt-1 flex items-center justify-between">
-                <span>{backlog?.eligibleActionCount ?? 0} total eligible</span>
+                <span>{backlog?.eligibleActionCount ?? 0} eligible actions in scope</span>
                 {backlog?.futureActionCount ? (
                   <span className="text-amber-400 font-medium">({backlog.futureActionCount} fut.)</span>
                 ) : null}
@@ -815,7 +815,7 @@ export const ActionsPage: React.FC = () => {
                           onClick={() => handleSort('currentAgeingDays')}
                           className="py-2.5 px-2 cursor-pointer hover:text-slate-900 font-mono text-right"
                         >
-                          Ageing {sortField === 'currentAgeingDays' && (sortAsc ? '↑' : '↓')}
+                          Ageing / Duration {sortField === 'currentAgeingDays' && (sortAsc ? '↑' : '↓')}
                         </th>
                         <th className="py-2.5 px-2 text-center">Effectiveness</th>
                         <th className="py-2.5 px-2 text-right">Drilldown</th>
@@ -860,8 +860,11 @@ export const ActionsPage: React.FC = () => {
                                   {act.riskType}
                                 </span>
                                 {act.evidence && (
-                                  <span className="text-slate-400 italic truncate max-w-[250px]" title={act.evidence}>
-                                    Ev: {act.evidence}
+                                  <span
+                                    className="px-1.5 py-0.2 rounded bg-slate-100 text-slate-500 font-medium text-[10px]"
+                                    title={act.evidence}
+                                  >
+                                    Evidence Logged
                                   </span>
                                 )}
                               </div>
@@ -925,7 +928,7 @@ export const ActionsPage: React.FC = () => {
                               </span>
                             </td>
 
-                            {/* Ageing */}
+                            {/* Ageing / Duration */}
                             <td className="py-2.5 px-2 font-mono text-right whitespace-nowrap">
                               {act.asOfTodayStatus === 'OPEN' && act.currentAgeingDays !== null ? (
                                 <span
@@ -937,11 +940,11 @@ export const ActionsPage: React.FC = () => {
                                       : 'text-slate-800'
                                   }`}
                                 >
-                                  {act.currentAgeingDays}d
+                                  {act.currentAgeingDays}d open
                                 </span>
                               ) : act.asOfTodayStatus === 'CLOSED' && act.closureDurationDays !== null ? (
-                                <span className="text-slate-400 text-[11px]">
-                                  {act.closureDurationDays}d closed
+                                <span className="text-slate-500 font-medium text-[11px]">
+                                  {act.closureDurationDays}d to close
                                 </span>
                               ) : (
                                 <span className="text-slate-400">—</span>

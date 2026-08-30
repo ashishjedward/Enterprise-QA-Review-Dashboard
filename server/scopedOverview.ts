@@ -135,32 +135,52 @@ function getSupplementalQuery(projectId: string, dataset: string, whereClause: s
       JOIN scoped_accounts acc ON i.Account_ID = acc.Account_ID
       JOIN reporting_month r ON i.Month = r.Latest_Closed_Month
     ),
-    action_calc AS (
+    action_base AS (
       SELECT
-        COUNTIF(UPPER(a.Status) NOT IN ('CLOSED', 'COMPLETED', 'DONE', 'RESOLVED')) AS Open_Actions,
-        COUNTIF(
-          UPPER(a.Status) NOT IN ('CLOSED', 'COMPLETED', 'DONE', 'RESOLVED')
-          AND (
-            CAST(a.Overdue_Flag AS STRING) IN ('YES', 'TRUE', 'Y', '1', 'true')
-            OR (a.Due_Date IS NOT NULL AND a.Due_Date < CURRENT_DATE('${BUSINESS_TIMEZONE}'))
-          )
-        ) AS Overdue_Actions,
-        COUNTIF(
-          UPPER(a.Status) NOT IN ('CLOSED', 'COMPLETED', 'DONE', 'RESOLVED')
-          AND (UPPER(a.Priority) IN ('CRITICAL', 'HIGH') OR a.Is_High_Priority = TRUE)
-        ) AS High_Critical_Actions,
-        COUNTIF(
-          UPPER(a.Status) NOT IN ('CLOSED', 'COMPLETED', 'DONE', 'RESOLVED')
-          AND a.Due_Date IS NOT NULL
-          AND a.Due_Date >= CURRENT_DATE('${BUSINESS_TIMEZONE}')
-          AND a.Due_Date <= DATE_ADD(CURRENT_DATE('${BUSINESS_TIMEZONE}'), INTERVAL 7 DAY)
-        ) AS Due_Next_7_Days,
-        SAFE_DIVIDE(
-          COUNTIF(UPPER(a.Status) IN ('CLOSED', 'COMPLETED', 'DONE', 'RESOLVED')),
-          COUNTIF(a.Due_Date <= CURRENT_DATE('${BUSINESS_TIMEZONE}') OR UPPER(a.Status) IN ('CLOSED', 'COMPLETED', 'DONE', 'RESOLVED'))
-        ) AS Closure_Rate
+        a.*,
+        CASE
+          WHEN a.Open_Date > CURRENT_DATE('${BUSINESS_TIMEZONE}')
+            THEN 'FUTURE'
+          WHEN a.Open_Date <= CURRENT_DATE('${BUSINESS_TIMEZONE}')
+            AND (
+              a.Closed_Date IS NULL
+              OR a.Closed_Date > CURRENT_DATE('${BUSINESS_TIMEZONE}')
+            )
+            THEN 'OPEN'
+          WHEN a.Closed_Date IS NOT NULL
+            AND a.Closed_Date <= CURRENT_DATE('${BUSINESS_TIMEZONE}')
+            THEN 'CLOSED'
+        END AS As_Of_Today_Status
       FROM \`${projectId}.${dataset}.vw_action_register\` a
       JOIN scoped_accounts acc ON a.Account_ID = acc.Account_ID
+    ),
+    action_calc AS (
+      SELECT
+        COUNTIF(As_Of_Today_Status = 'OPEN') AS Open_Actions,
+        COUNTIF(
+          As_Of_Today_Status = 'OPEN'
+          AND Due_Date < CURRENT_DATE('${BUSINESS_TIMEZONE}')
+        ) AS Overdue_Actions,
+        COUNTIF(
+          As_Of_Today_Status = 'OPEN'
+          AND (UPPER(Priority) IN ('CRITICAL', 'HIGH') OR Is_High_Priority = TRUE)
+        ) AS High_Critical_Actions,
+        COUNTIF(
+          As_Of_Today_Status = 'OPEN'
+          AND Due_Date >= CURRENT_DATE('${BUSINESS_TIMEZONE}')
+          AND Due_Date <= DATE_ADD(CURRENT_DATE('${BUSINESS_TIMEZONE}'), INTERVAL 7 DAY)
+        ) AS Due_Next_7_Days,
+        SAFE_DIVIDE(
+          COUNTIF(As_Of_Today_Status = 'CLOSED'),
+          COUNTIF(
+            Open_Date <= CURRENT_DATE('${BUSINESS_TIMEZONE}')
+            AND (
+              Due_Date <= CURRENT_DATE('${BUSINESS_TIMEZONE}')
+              OR (Closed_Date IS NOT NULL AND Closed_Date <= CURRENT_DATE('${BUSINESS_TIMEZONE}'))
+            )
+          )
+        ) AS Closure_Rate
+      FROM action_base
     )
     SELECT
       -- TNI
@@ -336,6 +356,9 @@ export async function fetchScopedDashboardOverview(filters: ScopeFilters) {
       accountCount: serialized.Total_Accounts,
     };
 
+    serialized.Open_Actions = suppData.Action_Snapshot.Open_Actions;
+    serialized.Overdue_Actions = suppData.Action_Snapshot.Overdue_Actions;
+    serialized.High_Critical_Actions = suppData.Action_Snapshot.High_Critical_Actions;
     serialized.Hygiene_Supplemental = suppData.Hygiene_Supplemental;
     serialized.Action_Snapshot = suppData.Action_Snapshot;
 
@@ -746,6 +769,9 @@ export async function fetchScopedDashboardOverview(filters: ScopeFilters) {
   return {
     ...reportingContext,
     ...summary,
+    Open_Actions: suppData.Action_Snapshot.Open_Actions,
+    Overdue_Actions: suppData.Action_Snapshot.Overdue_Actions,
+    High_Critical_Actions: suppData.Action_Snapshot.High_Critical_Actions,
     Scope: scopeObject,
     KPI_Cards: kpis,
     Attention_Bands: bands,
