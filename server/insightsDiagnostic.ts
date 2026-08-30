@@ -338,7 +338,7 @@ export async function fetchInsightsDiagnostic(
         Account_ID,
         COUNTIF(Is_Open = TRUE) AS Open_ZT_Count,
         COUNTIF(Is_Open = TRUE AND Is_Client_Identified = TRUE) AS Client_Open_ZT_Count,
-        COUNTIF(Is_Open = TRUE AND Requires_HR_Action = TRUE) AS HR_Action_Open_ZT_Count,
+        COUNTIF(Is_Open = TRUE AND (Requires_HR_Action = TRUE OR UPPER(ZTP_Reason) != 'COMPLIANCE LAPSE')) AS HR_Action_Open_ZT_Count,
         MAX(IF(Is_Open = TRUE, Pending_From_Ageing, NULL)) AS Max_ZT_Ageing_Days
       FROM \`${projectId}.${dataset}.vw_zt_tracker\`
       GROUP BY Account_ID

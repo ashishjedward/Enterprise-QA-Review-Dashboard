@@ -24,7 +24,7 @@ export const GlobalFilterBar: React.FC = () => {
   const scopedAccountCount = overview?.Total_Accounts !== undefined ? overview.Total_Accounts : availableAccounts.length;
 
   return (
-    <div className="bg-white border-b border-slate-200 px-3 sm:px-5 py-1.5 shadow-xs sticky top-[50px] z-20">
+    <div className="bg-white border-b border-slate-200 px-3 sm:px-5 py-1.5 shadow-xs sticky top-0 z-20">
       <div className="max-w-[1600px] mx-auto flex flex-wrap items-center justify-between gap-2">
         {/* Left: Filter Controls */}
         <div className="flex flex-wrap items-center gap-1.5">

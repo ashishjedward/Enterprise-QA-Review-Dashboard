@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useLayoutEffect } from 'react';
 import { DashboardDataProvider } from './context/DashboardDataContext';
 import { FilterProvider, useFilters } from './context/FilterContext';
 import { Header } from './components/layout/Header';
@@ -30,6 +30,23 @@ const AppContent: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const isMobile = useIsMobile(768);
+  const mainScrollRef = useRef<HTMLElement | null>(null);
+
+  useLayoutEffect(() => {
+    if (isMobile) {
+      window.scrollTo({
+        top: 0,
+        left: 0,
+        behavior: 'auto',
+      });
+    } else {
+      mainScrollRef.current?.scrollTo({
+        top: 0,
+        left: 0,
+        behavior: 'auto',
+      });
+    }
+  }, [activePage, isMobile]);
 
   const renderCurrentPage = () => {
     switch (activePage) {
@@ -107,7 +124,7 @@ const AppContent: React.FC = () => {
         <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
         {/* Core Content Area */}
-        <main className="flex-1 overflow-y-auto flex flex-col">
+        <main ref={mainScrollRef} className="flex-1 overflow-y-auto flex flex-col">
           {/* Persistent Global Filter Bar */}
           <GlobalFilterBar />
 
