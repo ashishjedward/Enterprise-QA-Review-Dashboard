@@ -28,21 +28,32 @@ export const GlobalFilterBar: React.FC = () => {
       <div className="max-w-[1600px] mx-auto flex flex-wrap items-center justify-between gap-2">
         {/* Left: Filter Controls */}
         <div className="flex flex-wrap items-center gap-1.5">
-          {/* Time Period Buttons */}
-          <div className="flex items-center bg-slate-100 p-0.5 rounded-xs border border-slate-200 mr-0.5">
-            {timePeriods.map((period) => (
-              <button
-                key={period}
-                onClick={() => setFilter('timePeriod', period)}
-                className={`px-2 py-0.5 text-[11px] font-bold rounded-xs transition-all cursor-pointer ${
-                  filters.timePeriod === period
-                    ? 'bg-white text-[#1A2B4B] shadow-xs'
-                    : 'text-slate-500 hover:text-slate-900'
-                }`}
-              >
-                {period}
-              </button>
-            ))}
+          {/* Time Period Buttons with Trend Window Label */}
+          <div
+            className="flex items-center gap-1.5 bg-slate-100 p-0.5 rounded-xs border border-slate-200 mr-0.5"
+            title="Controls historical trajectories and period activity. Official scorecard snapshots and current lifecycle metrics retain their stated as-of period."
+            aria-label="Trend Window: Controls historical trajectories and period activity. Official scorecard snapshots and current lifecycle metrics retain their stated as-of period."
+          >
+            <span className="hidden sm:inline text-[9px] uppercase tracking-wider font-bold text-slate-400 pl-1 select-none whitespace-nowrap">
+              <span className="hidden md:inline">Trend Window:</span>
+              <span className="md:hidden">Trend:</span>
+            </span>
+            <div className="flex items-center">
+              {timePeriods.map((period) => (
+                <button
+                  key={period}
+                  onClick={() => setFilter('timePeriod', period)}
+                  className={`px-2 py-0.5 text-[11px] font-bold rounded-xs transition-all cursor-pointer ${
+                    filters.timePeriod === period
+                      ? 'bg-white text-[#1A2B4B] shadow-xs'
+                      : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                  aria-pressed={filters.timePeriod === period}
+                >
+                  {period}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="h-3.5 w-px bg-slate-200 hidden sm:block mx-0.5" />

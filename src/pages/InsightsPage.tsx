@@ -19,11 +19,12 @@ import { RiskRadarTable } from '../components/insights/RiskRadarTable';
 import { CommercialAndTrendsSection } from '../components/insights/CommercialAndTrendsSection';
 
 export const InsightsPage: React.FC = () => {
-  const { navigateToPage, filters } = useFilters();
+  const { navigateToPage, filters, setFilter } = useFilters();
   const [data, setData] = useState<InsightsDiagnosticData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [timePeriod, setTimePeriod] = useState<InsightsTimePeriod>('12M');
+
+  const timePeriod = (filters.timePeriod || '12M') as InsightsTimePeriod;
 
   const loadData = useCallback(async () => {
     try {
@@ -31,7 +32,7 @@ export const InsightsPage: React.FC = () => {
       setError(null);
 
       const res = await getInsightsDiagnostic({
-        timePeriod,
+        timePeriod: (filters.timePeriod || '12M') as InsightsTimePeriod,
         vertical: filters.vertical !== 'ALL' ? filters.vertical : undefined,
         qaLeader: filters.qaLeader !== 'ALL' ? filters.qaLeader : undefined,
         srDirector: filters.srDirector !== 'ALL' ? filters.srDirector : undefined,
@@ -47,7 +48,15 @@ export const InsightsPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [timePeriod, filters]);
+  }, [
+    filters.timePeriod,
+    filters.vertical,
+    filters.qaLeader,
+    filters.srDirector,
+    filters.account,
+    filters.site,
+    filters.lob,
+  ]);
 
   useEffect(() => {
     loadData();
@@ -124,7 +133,7 @@ export const InsightsPage: React.FC = () => {
       <ExecutiveSynthesisHeader
         data={data}
         timePeriod={timePeriod}
-        onTimePeriodChange={(tp) => setTimePeriod(tp)}
+        onTimePeriodChange={(tp) => setFilter('timePeriod', tp)}
       />
 
       {/* 2. Priority Insights Section (Top Attention Accounts) */}

@@ -206,12 +206,18 @@ export const ValueAddsPage: React.FC = () => {
         breadcrumbLabel="Value-adds & Transformation"
         description="QaaS opportunity value, transformation portfolio and recorded benefit."
         contextBadges={
-          data?.reportingContext?.officialReportingMonth ? (
+          <>
             <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-mono border border-slate-200">
               <Calendar className="w-3 h-3 text-slate-500" />
-              Official: {data.reportingContext.officialReportingMonth}
+              Official: {data?.reportingContext?.officialReportingMonth || '…'}
             </span>
-          ) : undefined
+            {loading && data && (
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-mono border border-blue-200">
+                <RefreshCw className="w-3 h-3 animate-spin text-blue-600" />
+                Updating…
+              </span>
+            )}
+          </>
         }
       />
 
@@ -232,17 +238,50 @@ export const ValueAddsPage: React.FC = () => {
         </div>
       )}
 
-      {/* Empty scope notification */}
-      {!loading && !error && isScopeEmpty && (
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-6 text-center text-amber-900">
-          <ShieldAlert className="w-8 h-8 mx-auto text-amber-600 mb-2" />
-          <h3 className="text-sm font-bold">No accounts match the current filter scope</h3>
-          <p className="text-xs text-amber-700 mt-1 max-w-md mx-auto">
-            Please adjust your dimensional filters (Vertical, QA Leader, Sr. Director, Site, or Account) to view
-            Value-adds & Transformation Program metrics.
-          </p>
+      {/* Initial Loading Skeleton */}
+      {loading && !data && (
+        <div className="space-y-4 animate-pulse">
+          {/* 5 Headline Cards Skeleton */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="bg-white p-4 rounded-lg border border-slate-200 shadow-xs flex flex-col justify-between h-28">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="h-3 w-28 bg-slate-200 rounded"></div>
+                    <div className="w-4 h-4 bg-slate-200 rounded"></div>
+                  </div>
+                  <div className="h-7 w-24 bg-slate-200 rounded mt-1"></div>
+                </div>
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                  <div className="h-2.5 w-16 bg-slate-100 rounded"></div>
+                  <div className="h-2.5 w-12 bg-slate-200 rounded"></div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Section Placeholder */}
+          <div className="bg-white rounded-lg border border-slate-200 p-8 shadow-xs min-h-[360px] flex flex-col justify-center items-center text-slate-400 gap-3">
+            <RefreshCw className="w-6 h-6 animate-spin text-slate-400" />
+            <span className="text-sm font-medium text-slate-500">Loading Value-adds portfolio…</span>
+          </div>
         </div>
       )}
+
+      {/* Main Content when Data is Available */}
+      {data && (
+        <>
+          {/* Empty scope notification */}
+          {!loading && !error && isScopeEmpty && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-6 text-center text-amber-900">
+              <ShieldAlert className="w-8 h-8 mx-auto text-amber-600 mb-2" />
+              <h3 className="text-sm font-bold">No accounts match the current filter scope</h3>
+              <p className="text-xs text-amber-700 mt-1 max-w-md mx-auto">
+                Please adjust your dimensional filters (Vertical, QA Leader, Sr. Director, Site, or Account) to view
+                Value-adds & Transformation Program metrics.
+              </p>
+            </div>
+          )}
 
       {/* 2. Primary Headline Cards (5 Factual Cards) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
@@ -1105,6 +1144,8 @@ export const ValueAddsPage: React.FC = () => {
           </div>
         </div>
       )}
-    </div>
-  );
+      </>
+    )}
+  </div>
+);
 };
