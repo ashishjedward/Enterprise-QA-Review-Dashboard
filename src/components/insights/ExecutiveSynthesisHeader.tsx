@@ -67,14 +67,17 @@ export const ExecutiveSynthesisHeader: React.FC<ExecutiveSynthesisHeaderProps> =
     }
   };
 
-  const formatCurrency = (val: number) => {
-    if (Math.abs(val) >= 1_000_000) {
-      return `$${(val / 1_000_000).toFixed(2)}M`;
+  const formatUnitless = (val: number | null | undefined): string => {
+    if (val === null || val === undefined || isNaN(val)) return '0';
+    if (val === 0) return '0';
+    const abs = Math.abs(val);
+    if (abs >= 1_000_000) {
+      return `${(val / 1_000_000).toFixed(2)}M`;
     }
-    if (Math.abs(val) >= 1_000) {
-      return `$${(val / 1_000).toFixed(1)}K`;
+    if (abs >= 1_000) {
+      return `${(val / 1_000).toFixed(1)}K`;
     }
-    return `$${val.toLocaleString()}`;
+    return val.toLocaleString();
   };
 
   return (
@@ -238,7 +241,9 @@ export const ExecutiveSynthesisHeader: React.FC<ExecutiveSynthesisHeaderProps> =
             <span className="text-[11px] font-bold text-slate-600">Open</span>
           </div>
           <div className="mt-2 text-[10px] text-rose-600 font-medium">
-            14 require HR action
+            {scopeSummary.hrActionOpenZtCount === 1
+              ? '1 requires HR action'
+              : `${scopeSummary.hrActionOpenZtCount || 0} require HR action`}
           </div>
         </div>
 
@@ -286,7 +291,7 @@ export const ExecutiveSynthesisHeader: React.FC<ExecutiveSynthesisHeaderProps> =
           className="bg-white border border-slate-200 rounded-lg p-3.5 shadow-xs hover:border-slate-300 transition-all cursor-pointer group"
         >
           <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-            Net Commercial (Jul)
+            Net Commercial ({reportingContext.reportingMonth || 'Jul-26'})
           </div>
           <div className="flex items-baseline gap-1 mt-1">
             <span
@@ -296,11 +301,11 @@ export const ExecutiveSynthesisHeader: React.FC<ExecutiveSynthesisHeaderProps> =
                   : 'text-rose-700'
               }`}
             >
-              {formatCurrency(currentCommercialContext.netCommercialImpact)}
+              {formatUnitless(currentCommercialContext.netCommercialImpact)}
             </span>
           </div>
           <div className="mt-2 text-[10px] text-slate-500">
-            Penalties: {formatCurrency(currentCommercialContext.penaltyPaid)}
+            Penalty Paid: {formatUnitless(currentCommercialContext.penaltyPaid)}
           </div>
         </div>
       </div>

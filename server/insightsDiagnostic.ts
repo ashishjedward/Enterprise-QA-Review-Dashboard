@@ -178,6 +178,7 @@ export interface InsightsDiagnosticResponse {
     openEscalationCount: number;
     highCriticalEscalationCount: number;
     openZtCount: number;
+    hrActionOpenZtCount: number;
     openCqmCount: number;
     openActionCount: number;
     overdueActionCount: number;
@@ -273,7 +274,7 @@ export async function fetchInsightsDiagnostic(
     queryParams.srDirector = filters.srDirector;
   }
   if (filters.accountId && filters.accountId !== 'ALL') {
-    whereClauses.push('m.Account_ID = @accountId');
+    whereClauses.push('(m.Account_ID = @accountId OR m.Account = @accountId)');
     queryParams.accountId = filters.accountId;
   }
   if (filters.site && filters.site !== 'ALL') {
@@ -527,9 +528,10 @@ export async function fetchInsightsDiagnostic(
         COUNTIF(k.Effective_RAG = "Amber") AS Amber_Count,
         COUNTIF(k.Effective_RAG = "Green") AS Green_Count,
         COUNT(k.Actual_Value) AS Accounts_With_Data
-      FROM \`${projectId}.${dataset}.vw_kpi_snapshot_official\` k
+      FROM \`${projectId}.${dataset}.vw_kpi_snapshot\` k
       JOIN scoped_accounts sa ON k.Account_ID = sa.Account_ID
-      WHERE k.Month >= @trendStartDate AND k.Month <= @latestClosedMonth
+      WHERE k.Month >= CAST(@trendStartDate AS DATE) AND k.Month <= CAST(@latestClosedMonth AS DATE)
+        AND k.Data_Presence_Status = "HAS DATA"
       GROUP BY k.Month, k.Metric_ID, k.Metric, k.Metric_Scale, k.Is_Higher_Better
       ORDER BY k.Metric_ID, k.Month ASC
     )
@@ -690,6 +692,7 @@ export async function fetchInsightsDiagnostic(
   let openEscalationCount = 0;
   let highCriticalEscalationCount = 0;
   let openZtCount = 0;
+  let hrActionOpenZtCount = 0;
   let openCqmCount = 0;
   let openActionCount = 0;
   let overdueActionCount = 0;
@@ -717,6 +720,7 @@ export async function fetchInsightsDiagnostic(
     openEscalationCount += row.Open_Escalation_Count || 0;
     highCriticalEscalationCount += row.High_Critical_Escalation_Count || 0;
     openZtCount += row.Open_ZT_Count || 0;
+    hrActionOpenZtCount += row.HR_Action_Open_ZT_Count || 0;
     openCqmCount += row.Open_CQM_Count || 0;
     openActionCount += row.Live_Open_Action_Count || 0;
     overdueActionCount += row.Live_Overdue_Action_Count || 0;
@@ -1029,10 +1033,10 @@ export async function fetchInsightsDiagnostic(
         id: `pos-action-${acc.Account_ID}`,
         accountId: acc.Account_ID,
         accountName: acc.Account_Name,
-        title: 'Complete Action Closure Discipline',
+        title: 'ACTION BACKLOG FULLY CLOSED',
         metricLabel: 'Action Closure Rate',
         achievementValue: '100.0%',
-        summary: `All ${acc.Live_Closed_Action_Count} corrective actions successfully closed with zero active or overdue backlog items.`,
+        summary: `All ${acc.Live_Closed_Action_Count} matured actions are closed with 0 overdue actions.`,
         navigationTarget: { page: 'actions', accountId: acc.Account_ID },
       });
     }
@@ -1046,10 +1050,10 @@ export async function fetchInsightsDiagnostic(
         id: `pos-qaas-${acc.Account_ID}`,
         accountId: acc.Account_ID,
         accountName: acc.Account_Name,
-        title: 'QaaS Program Target Exceeded',
+        title: 'QAAS PROGRAM VALUE ABOVE TARGET',
         metricLabel: 'Program Value Achievement',
         achievementValue: `${achPct.toFixed(1)}%`,
-        summary: `Recorded QaaS program value of ${(qaasProgVal / 1000).toFixed(1)}K exceeded contractual target of ${(qaasTgtVal / 1000).toFixed(1)}K.`,
+        summary: `Recorded QaaS Program Value is ${(qaasProgVal / 1000).toFixed(1)}K versus target ${(qaasTgtVal / 1000).toFixed(1)}K (${achPct.toFixed(1)}%).`,
         navigationTarget: { page: 'value-adds', accountId: acc.Account_ID },
       });
     }
@@ -1062,10 +1066,10 @@ export async function fetchInsightsDiagnostic(
         id: `pos-qa-team-${acc.Account_ID}`,
         accountId: acc.Account_ID,
         accountName: acc.Account_Name,
-        title: 'Resource Stability & Target Utilization',
+        title: 'QA UTILIZATION & ATTRITION ON TARGET',
         metricLabel: 'Utilization / Attrition',
         achievementValue: `${utilKpi.Actual_Display || '90.0%'} / ${attrKpi.Actual_Display || '0.0%'}`,
-        summary: 'Both QA Utilization and Attrition met target thresholds with stable workforce coverage.',
+        summary: `QA Utilization is ${utilKpi.Actual_Display || '90.0%'} and QA Attrition is ${attrKpi.Actual_Display || '0.0%'}; both meet their current Green targets.`,
         navigationTarget: { page: 'qa-team', accountId: acc.Account_ID },
       });
     }
@@ -1076,12 +1080,13 @@ export async function fetchInsightsDiagnostic(
       r => r.Live_Open_Action_Count === 0 && r.Live_Overdue_Action_Count === 0 && r.Live_Closed_Action_Count > 0
     );
     if (accountsWithZeroOverdueAndClosed.length > 0) {
+      const accWord = accountsWithZeroOverdueAndClosed.length === 1 ? 'account' : 'accounts';
       positiveSignals.push({
         id: 'pos-portfolio-actions',
-        title: 'Action Backlog Discipline',
+        title: 'ACTION BACKLOG DISCIPLINE',
         metricLabel: 'Accounts with Zero Overdue',
-        achievementValue: `${accountsWithZeroOverdueAndClosed.length} Accounts`,
-        summary: `${accountsWithZeroOverdueAndClosed.length} accounts maintain 100% matured action closure with zero open or overdue corrective items.`,
+        achievementValue: `${accountsWithZeroOverdueAndClosed.length} Account${accountsWithZeroOverdueAndClosed.length !== 1 ? 's' : ''}`,
+        summary: `${accountsWithZeroOverdueAndClosed.length} ${accWord} maintain 100% matured action closure with zero open or overdue corrective items.`,
         navigationTarget: { page: 'actions' },
       });
     }
@@ -1089,14 +1094,14 @@ export async function fetchInsightsDiagnostic(
     // 2. QaaS Portfolio Achievement
     const qaasProgVal = commRow.QaaS_Program_Value || 0;
     const qaasTgtVal = commRow.QaaS_Target_Value || 0;
-    if (qaasTgtVal > 0) {
+    if (qaasTgtVal > 0 && qaasProgVal >= qaasTgtVal) {
       const achPct = (qaasProgVal / qaasTgtVal) * 100;
       positiveSignals.push({
         id: 'pos-portfolio-qaas',
-        title: 'QaaS Program Delivery',
+        title: 'QAAS PROGRAM VALUE ABOVE TARGET',
         metricLabel: 'Portfolio Value Achievement',
         achievementValue: `${achPct.toFixed(1)}%`,
-        summary: `Total QaaS Program Value reached ${(qaasProgVal / 1000000).toFixed(2)}M against target of ${(qaasTgtVal / 1000000).toFixed(2)}M.`,
+        summary: `Total QaaS Program Value reached ${(qaasProgVal / 1000000).toFixed(2)}M against target of ${(qaasTgtVal / 1000000).toFixed(2)}M (${achPct.toFixed(1)}%).`,
         navigationTarget: { page: 'value-adds' },
       });
     }
@@ -1106,10 +1111,10 @@ export async function fetchInsightsDiagnostic(
       const greenPct = (greenSentimentCount / totalAccountsInScope) * 100;
       positiveSignals.push({
         id: 'pos-portfolio-sentiment',
-        title: 'Positive Client Partnerships',
+        title: 'POSITIVE CLIENT PARTNERSHIPS',
         metricLabel: 'Green Sentiment Coverage',
         achievementValue: `${greenPct.toFixed(1)}%`,
-        summary: `${greenSentimentCount} accounts have Green client sentiment ratings indicating strong operational satisfaction.`,
+        summary: `${greenSentimentCount} account${greenSentimentCount !== 1 ? 's' : ''} have Green client sentiment ratings indicating strong operational satisfaction.`,
         navigationTarget: { page: 'overview' },
       });
     }
@@ -1288,8 +1293,13 @@ export async function fetchInsightsDiagnostic(
       );
     }
     if (openZtCount > 0) {
+      const ztPlural = openZtCount === 1 ? 'incident' : 'incidents';
+      const hrText =
+        hrActionOpenZtCount === 1
+          ? '1 requiring HR action'
+          : `${hrActionOpenZtCount} requiring HR action`;
       keyObservations.push(
-        `${openZtCount} open Zero Tolerance incidents tracked across the portfolio (14 requiring HR action).`
+        `${openZtCount} open Zero Tolerance ${ztPlural} tracked across the scoped portfolio (${hrText}).`
       );
     }
     if (overdueActionCount > 0) {
@@ -1329,6 +1339,7 @@ export async function fetchInsightsDiagnostic(
       openEscalationCount,
       highCriticalEscalationCount,
       openZtCount,
+      hrActionOpenZtCount,
       openCqmCount,
       openActionCount,
       overdueActionCount,

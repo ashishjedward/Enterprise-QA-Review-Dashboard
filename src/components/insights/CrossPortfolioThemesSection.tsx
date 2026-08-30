@@ -21,7 +21,7 @@ export const CrossPortfolioThemesSection: React.FC<CrossPortfolioThemesSectionPr
   if (!themes || themes.length === 0) {
     return (
       <div className="bg-white border border-slate-200 rounded-lg p-5 text-center text-slate-500 shadow-xs">
-        <p className="text-xs">No systemic cross-portfolio KPI defect concentrations detected.</p>
+        <p className="text-xs">No cross-portfolio KPI risk concentrations detected.</p>
       </div>
     );
   }
@@ -32,7 +32,7 @@ export const CrossPortfolioThemesSection: React.FC<CrossPortfolioThemesSectionPr
         <div className="flex items-center gap-2">
           <Layers className="w-4 h-4 text-sky-600" />
           <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
-            Systemic Portfolio Themes & Defect Concentrations
+            Cross-Portfolio Themes & Risk Concentrations
           </h2>
         </div>
         <span className="text-xs text-slate-500 font-medium">

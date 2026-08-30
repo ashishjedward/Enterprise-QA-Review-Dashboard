@@ -1604,6 +1604,7 @@ export interface InsightsDiagnosticData {
     openEscalationCount: number;
     highCriticalEscalationCount: number;
     openZtCount: number;
+    hrActionOpenZtCount: number;
     openCqmCount: number;
     openActionCount: number;
     overdueActionCount: number;
