@@ -15,6 +15,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { useFilters } from '../../context/FilterContext';
+import { useDashboardData } from '../../context/DashboardDataContext';
 import { ActivePage } from '../../types';
 
 interface NavItem {
@@ -26,8 +27,12 @@ interface NavItem {
 }
 
 export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({ isOpen, onClose }) => {
-  const { activePage, navigateToPage, filteredActions, sentimentBreakdown, openDrawer } = useFilters();
+  const { activePage, navigateToPage, openDrawer } = useFilters();
+  const { overview } = useDashboardData();
   const [collapsed, setCollapsed] = useState<boolean>(false);
+
+  const overdueActionCount = overview?.Overdue_Actions ?? overview?.Action_Snapshot?.Overdue_Actions ?? 0;
+  const redSentimentCount = overview?.Client_Sentiment_Red_Accounts ?? 0;
 
   const navItems: NavItem[] = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
@@ -39,14 +44,14 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onClose?: () => void }> = ({ 
       id: 'actions', 
       label: 'Actions', 
       icon: ListChecks,
-      badge: filteredActions.filter((a) => a.status === 'Overdue').length || undefined,
+      badge: overdueActionCount > 0 ? overdueActionCount : undefined,
       badgeColor: 'bg-rose-500 text-white'
     },
     { 
       id: 'insights', 
       label: 'Insights', 
       icon: Lightbulb,
-      badge: sentimentBreakdown.redCount > 0 ? `${sentimentBreakdown.redCount} Alert` : undefined,
+      badge: redSentimentCount > 0 ? `${redSentimentCount} Alert` : undefined,
       badgeColor: 'bg-amber-500 text-white'
     },
     { id: 'reports', label: 'Reports', icon: FileText },

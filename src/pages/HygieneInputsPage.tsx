@@ -253,7 +253,7 @@ export const HygieneInputsPage: React.FC = () => {
     },
   ];
 
-  // Chart configuration based on active metric
+  // Chart configuration based on active metric - consumes dynamic targets from live API response
   const getChartConfig = () => {
     switch (activeTrendMetric) {
       case 'M006':
@@ -261,8 +261,8 @@ export const HygieneInputsPage: React.FC = () => {
           title: 'M006 — Audit & Feedback Achievement Trajectory',
           dataKey: 'm006Actual',
           displayKey: 'm006Display',
-          target: 0.95,
-          targetLabel: 'Target 95%',
+          target: headlineKpis.m006.targetValue,
+          targetLabel: headlineKpis.m006.targetDisplay ? `Target ${headlineKpis.m006.targetDisplay}` : 'Target N/A',
           isPercent: true,
           unit: '%',
           strokeColor: '#0D9488',
@@ -272,8 +272,8 @@ export const HygieneInputsPage: React.FC = () => {
           title: 'M007 — Hygiene Audits Accuracy Trajectory',
           dataKey: 'm007Actual',
           displayKey: 'm007Display',
-          target: 0.96,
-          targetLabel: 'Target 96%',
+          target: headlineKpis.m007.targetValue,
+          targetLabel: headlineKpis.m007.targetDisplay ? `Target ${headlineKpis.m007.targetDisplay}` : 'Target N/A',
           isPercent: true,
           unit: '%',
           strokeColor: '#3B82F6',
@@ -283,8 +283,8 @@ export const HygieneInputsPage: React.FC = () => {
           title: 'M008 — Calibration Attendance Trajectory',
           dataKey: 'm008Actual',
           displayKey: 'm008Display',
-          target: 0.95,
-          targetLabel: 'Target 95%',
+          target: headlineKpis.m008.targetValue,
+          targetLabel: headlineKpis.m008.targetDisplay ? `Target ${headlineKpis.m008.targetDisplay}` : 'Target N/A',
           isPercent: true,
           unit: '%',
           strokeColor: '#10B981',
@@ -294,8 +294,8 @@ export const HygieneInputsPage: React.FC = () => {
           title: 'M009 — ATA Internal Quality Score Trajectory',
           dataKey: 'm009Actual',
           displayKey: 'm009Display',
-          target: 95,
-          targetLabel: 'Target 95',
+          target: headlineKpis.m009.targetValue,
+          targetLabel: headlineKpis.m009.targetDisplay ? `Target ${headlineKpis.m009.targetDisplay}` : 'Target N/A',
           isPercent: false,
           unit: ' Score',
           strokeColor: '#F59E0B',
@@ -305,8 +305,8 @@ export const HygieneInputsPage: React.FC = () => {
           title: 'M010 — ATA External Client Score Trajectory',
           dataKey: 'm010Actual',
           displayKey: 'm010Display',
-          target: 94,
-          targetLabel: 'Target 94',
+          target: headlineKpis.m010.targetValue,
+          targetLabel: headlineKpis.m010.targetDisplay ? `Target ${headlineKpis.m010.targetDisplay}` : 'Target N/A',
           isPercent: false,
           unit: ' Score',
           strokeColor: '#8B5CF6',

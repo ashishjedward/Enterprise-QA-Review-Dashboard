@@ -588,7 +588,7 @@ export const QATeamPage: React.FC = () => {
                   data={historicalTrends.map((t) => ({
                     ...t,
                     utilPctFormatted: t.utilizationPct !== null ? Number((t.utilizationPct * 100).toFixed(1)) : null,
-                    targetUtil: 90,
+                    targetUtil: headline.utilization.targetValue !== null ? headline.utilization.targetValue * 100 : 90,
                   }))}
                   margin={{ top: 10, right: 20, left: 0, bottom: 0 }}
                 >
@@ -600,7 +600,17 @@ export const QATeamPage: React.FC = () => {
                     formatter={(val: any, name: string) => [val !== null ? `${val}%` : 'N/A', name]}
                   />
                   <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '6px' }} />
-                  <ReferenceLine y={90} stroke="#10b981" strokeDasharray="3 3" label={{ value: 'Target 90%', fill: '#10b981', fontSize: 10, position: 'insideTopRight' }} />
+                  <ReferenceLine
+                    y={headline.utilization.targetValue !== null ? headline.utilization.targetValue * 100 : 90}
+                    stroke="#10b981"
+                    strokeDasharray="3 3"
+                    label={{
+                      value: headline.utilization.targetDisplay ? `Target ${headline.utilization.targetDisplay}` : 'Target N/A',
+                      fill: '#10b981',
+                      fontSize: 10,
+                      position: 'insideTopRight'
+                    }}
+                  />
                   <Line type="monotone" dataKey="utilPctFormatted" name="QA Utilization %" stroke="#d97706" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
                 </LineChart>
               ) : trendMetric === 'ATTRITION' ? (
@@ -608,7 +618,7 @@ export const QATeamPage: React.FC = () => {
                   data={historicalTrends.map((t) => ({
                     ...t,
                     attrPctFormatted: t.attritionPct !== null ? Number((t.attritionPct * 100).toFixed(1)) : null,
-                    targetAttr: 10,
+                    targetAttr: headline.attrition.targetValue !== null ? headline.attrition.targetValue * 100 : 10,
                   }))}
                   margin={{ top: 10, right: 20, left: 0, bottom: 0 }}
                 >
@@ -620,7 +630,17 @@ export const QATeamPage: React.FC = () => {
                     formatter={(val: any, name: string) => [val !== null ? `${val}%` : 'N/A', name]}
                   />
                   <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '6px' }} />
-                  <ReferenceLine y={10} stroke="#10b981" strokeDasharray="3 3" label={{ value: 'Target 10%', fill: '#10b981', fontSize: 10, position: 'insideTopRight' }} />
+                  <ReferenceLine
+                    y={headline.attrition.targetValue !== null ? headline.attrition.targetValue * 100 : 10}
+                    stroke="#10b981"
+                    strokeDasharray="3 3"
+                    label={{
+                      value: headline.attrition.targetDisplay ? `Target ${headline.attrition.targetDisplay}` : 'Target N/A',
+                      fill: '#10b981',
+                      fontSize: 10,
+                      position: 'insideTopRight'
+                    }}
+                  />
                   <Line type="monotone" dataKey="attrPctFormatted" name="QA Attrition Rate % (Annualized)" stroke="#e11d48" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
                 </LineChart>
               ) : (

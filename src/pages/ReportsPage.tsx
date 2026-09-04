@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { FileText, Download, Printer, CheckCircle, ArrowLeft, Calendar, ShieldCheck, Share2 } from 'lucide-react';
 import { useFilters } from '../context/FilterContext';
+import { useDashboardData } from '../context/DashboardDataContext';
 import { StatusBadge } from '../components/common/StatusBadge';
 
 export const ReportsPage: React.FC = () => {
   const { navigateToPage, overallSla, overallBestQm, sentimentBreakdown, filteredAccounts, filters } = useFilters();
+  const { overview } = useDashboardData();
   const [downloadSuccess, setDownloadSuccess] = useState(false);
 
   const handleExport = (type: string) => {

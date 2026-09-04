@@ -299,7 +299,8 @@ export const BestQmDetailPage: React.FC = () => {
   }).filter((p): p is { x: number; y: number; value: number; display: string; month: string; rag: 'Green' | 'Amber' | 'Red' | null; count: number; idx: number } => p !== null);
 
   const polylinePoints = validTrendPoints.map((p) => `${p.x},${p.y}`).join(' ');
-  const targetY = 130 - ((90.0 - yMin) / yRange) * 110;
+  const targetVal = Headline.Target_Value;
+  const targetY = targetVal != null ? 130 - ((targetVal - yMin) / yRange) * 110 : null;
 
   return (
     <div className="space-y-4 max-w-[1600px] mx-auto pb-10">
@@ -363,7 +364,7 @@ export const BestQmDetailPage: React.FC = () => {
         {/* Card 2: Accounts on Target */}
         <div className="bg-white p-3.5 rounded-md border border-slate-200 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500">Accounts on Target (&ge;90)</span>
+            <span className="text-xs font-semibold text-slate-500">Accounts on Target (&ge;{Headline.Target_Display})</span>
             <StatusBadge status={targetBadgeStatus} size="xs" label={targetBadgeLabel} />
           </div>
           <div className="my-1.5 flex items-baseline justify-between">
@@ -424,7 +425,7 @@ export const BestQmDetailPage: React.FC = () => {
           <div>
             <div className="flex items-center gap-2">
               <h3 className="text-sm font-bold text-slate-900">
-                {filters.timePeriod} BEST QM Quality Trend vs 90.0 Benchmark
+                {filters.timePeriod} BEST QM Quality Trend vs {Headline.Target_Display} Benchmark
               </h3>
               {Range_Context.historyCoverageStatus === 'PARTIAL_HISTORY' && (
                 <span className="px-2 py-0.5 text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200 rounded">
@@ -443,7 +444,7 @@ export const BestQmDetailPage: React.FC = () => {
             </div>
             <div className="flex items-center gap-1.5">
               <span className="w-3 h-0.5 border-t-2 border-dashed border-slate-400 inline-block"></span>
-              <span className="text-slate-500 font-medium">Standard (90)</span>
+              <span className="text-slate-500 font-medium">Standard ({Headline.Target_Display})</span>
             </div>
           </div>
         </div>
@@ -463,16 +464,18 @@ export const BestQmDetailPage: React.FC = () => {
               );
             })}
 
-            {/* Target 90.0 Benchmark Line */}
-            <line
-              x1="50"
-              y1={targetY}
-              x2="780"
-              y2={targetY}
-              stroke="#94a3b8"
-              strokeDasharray="4 4"
-              strokeWidth="1.5"
-            />
+            {/* Target Benchmark Line */}
+            {targetY != null && (
+              <line
+                x1="50"
+                y1={targetY}
+                x2="780"
+                y2={targetY}
+                stroke="#94a3b8"
+                strokeDasharray="4 4"
+                strokeWidth="1.5"
+              />
+            )}
 
             {/* Actual Line & Markers */}
             {validTrendPoints.length > 0 && (
@@ -486,15 +489,16 @@ export const BestQmDetailPage: React.FC = () => {
                   points={polylinePoints}
                 />
                 {validTrendPoints.map((p) => {
-                  const isBelow = p.value < 90.0;
-                  const isRed = p.value < 85.0;
+                  const circleColor = p.rag === 'Red' ? '#e11d48' : p.rag === 'Amber' ? '#d97706' : p.rag === 'Green' ? '#16a34a' : '#64748b';
+                  const textColor = p.rag === 'Red' ? '#be123c' : p.rag === 'Amber' ? '#b45309' : '#0f172a';
+                  const isAttention = p.rag === 'Red' || p.rag === 'Amber';
                   return (
                     <g key={p.idx}>
                       <circle
                         cx={p.x}
                         cy={p.y}
-                        r={isBelow ? 4.5 : 3.5}
-                        fill={isRed ? '#e11d48' : isBelow ? '#d97706' : '#16a34a'}
+                        r={isAttention ? 4.5 : 3.5}
+                        fill={circleColor}
                         stroke="#ffffff"
                         strokeWidth="1.5"
                       />
@@ -504,7 +508,7 @@ export const BestQmDetailPage: React.FC = () => {
                         fontSize="9"
                         fontWeight="bold"
                         textAnchor="middle"
-                        fill={isRed ? '#be123c' : isBelow ? '#b45309' : '#0f172a'}
+                        fill={textColor}
                         fontFamily="monospace"
                       >
                         {p.display}
@@ -538,7 +542,7 @@ export const BestQmDetailPage: React.FC = () => {
               Aggregated scores across core quality dimensions in the {Reporting_Context.reportingMonthLabel} period.
             </p>
           </div>
-          <span className="text-xs text-slate-400 font-mono">Standard Target: 90</span>
+          <span className="text-xs text-slate-400 font-mono">Target: {Headline.Target_Display}</span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
@@ -563,7 +567,7 @@ export const BestQmDetailPage: React.FC = () => {
                 <span>Target: {param.Target_Display}</span>
                 <span
                   className={`font-semibold font-mono ${
-                    param.Variance_Value >= 0 ? 'text-emerald-700' : 'text-amber-700'
+                    (param.Variance_Value ?? 0) >= 0 ? 'text-emerald-700' : 'text-amber-700'
                   }`}
                 >
                   {param.Variance_Display}
@@ -580,7 +584,7 @@ export const BestQmDetailPage: React.FC = () => {
         <div className="bg-white p-4 rounded-md border border-slate-200 shadow-xs">
           <div className="text-xs font-bold text-slate-900 pb-2 mb-2 border-b border-slate-100 flex items-center justify-between">
             <span>BEST QM by Vertical</span>
-            <span className="text-[10px] text-slate-500 font-normal">Target: 90</span>
+            <span className="text-[10px] text-slate-500 font-normal">Target: {Headline.Target_Display}</span>
           </div>
           <div className="space-y-1">
             {Comparisons.byVertical.map((v, idx) => (
@@ -588,8 +592,8 @@ export const BestQmDetailPage: React.FC = () => {
                 key={idx}
                 label={v.Dimension_Label}
                 subLabel={`${v.Account_Count} accs`}
-                value={v.Actual_Value}
-                target={90.0}
+                value={v.Actual_Value ?? 0}
+                target={v.Target_Value ?? (Headline.Target_Value ?? undefined)}
                 unit=""
                 rag={v.RAG === 'Green' ? 'GREEN' : v.RAG === 'Amber' ? 'AMBER' : 'RED'}
                 min={75}
@@ -603,7 +607,7 @@ export const BestQmDetailPage: React.FC = () => {
         <div className="bg-white p-4 rounded-md border border-slate-200 shadow-xs">
           <div className="text-xs font-bold text-slate-900 pb-2 mb-2 border-b border-slate-100 flex items-center justify-between">
             <span>BEST QM by QA Leader</span>
-            <span className="text-[10px] text-slate-500 font-normal">Target: 90</span>
+            <span className="text-[10px] text-slate-500 font-normal">Target: {Headline.Target_Display}</span>
           </div>
           <div className="space-y-1">
             {Comparisons.byQaLeader.map((l, idx) => (
@@ -611,8 +615,8 @@ export const BestQmDetailPage: React.FC = () => {
                 key={idx}
                 label={l.Dimension_Label}
                 subLabel={`${l.Account_Count} accs`}
-                value={l.Actual_Value}
-                target={90.0}
+                value={l.Actual_Value ?? 0}
+                target={l.Target_Value ?? (Headline.Target_Value ?? undefined)}
                 unit=""
                 rag={l.RAG === 'Green' ? 'GREEN' : l.RAG === 'Amber' ? 'AMBER' : 'RED'}
                 min={75}
@@ -626,7 +630,7 @@ export const BestQmDetailPage: React.FC = () => {
         <div className="bg-white p-4 rounded-md border border-slate-200 shadow-xs">
           <div className="text-xs font-bold text-slate-900 pb-2 mb-2 border-b border-slate-100 flex items-center justify-between">
             <span>BEST QM by Sr Director</span>
-            <span className="text-[10px] text-slate-500 font-normal">Target: 90</span>
+            <span className="text-[10px] text-slate-500 font-normal">Target: {Headline.Target_Display}</span>
           </div>
           <div className="space-y-1">
             {Comparisons.bySrDirector.map((d, idx) => (
@@ -634,8 +638,8 @@ export const BestQmDetailPage: React.FC = () => {
                 key={idx}
                 label={d.Dimension_Label}
                 subLabel={`${d.Account_Count} accs`}
-                value={d.Actual_Value}
-                target={90.0}
+                value={d.Actual_Value ?? 0}
+                target={d.Target_Value ?? (Headline.Target_Value ?? undefined)}
                 unit=""
                 rag={d.RAG === 'Green' ? 'GREEN' : d.RAG === 'Amber' ? 'AMBER' : 'RED'}
                 min={75}
@@ -747,7 +751,7 @@ export const BestQmDetailPage: React.FC = () => {
                     </td>
                     <td
                       className={`py-2.5 px-2 text-right font-mono font-semibold ${
-                        acc.Variance_Value >= 0 ? 'text-emerald-700' : 'text-amber-700'
+                        (acc.Variance_Value ?? 0) >= 0 ? 'text-emerald-700' : 'text-amber-700'
                       }`}
                     >
                       {acc.Variance_Display}

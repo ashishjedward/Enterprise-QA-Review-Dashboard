@@ -14,6 +14,7 @@ import {
   Shield
 } from 'lucide-react';
 import { useFilters } from '../../context/FilterContext';
+import { useDashboardData } from '../../context/DashboardDataContext';
 import { ActivePage } from '../../types';
 
 interface MobileNavDrawerProps {
@@ -30,7 +31,11 @@ interface NavItem {
 }
 
 export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({ isOpen, onClose }) => {
-  const { activePage, navigateToPage, filteredActions, sentimentBreakdown, openDrawer } = useFilters();
+  const { activePage, navigateToPage, openDrawer } = useFilters();
+  const { overview } = useDashboardData();
+
+  const overdueActionCount = overview?.Overdue_Actions ?? overview?.Action_Snapshot?.Overdue_Actions ?? 0;
+  const redSentimentCount = overview?.Client_Sentiment_Red_Accounts ?? 0;
 
   // Close on Escape key press
   useEffect(() => {
@@ -67,14 +72,14 @@ export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({ isOpen, onClos
       id: 'actions', 
       label: 'Actions', 
       icon: ListChecks,
-      badge: filteredActions.filter((a) => a.status === 'Overdue').length || undefined,
+      badge: overdueActionCount > 0 ? overdueActionCount : undefined,
       badgeColor: 'bg-rose-500 text-white'
     },
     { 
       id: 'insights', 
       label: 'Insights', 
       icon: Lightbulb,
-      badge: sentimentBreakdown.redCount > 0 ? `${sentimentBreakdown.redCount} Alert` : undefined,
+      badge: redSentimentCount > 0 ? `${redSentimentCount} Alert` : undefined,
       badgeColor: 'bg-amber-500 text-white'
     },
     { id: 'reports', label: 'Reports', icon: FileText },

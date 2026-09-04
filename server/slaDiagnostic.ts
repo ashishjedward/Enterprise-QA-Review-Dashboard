@@ -1,6 +1,7 @@
 import { BigQuery } from '@google-cloud/bigquery';
 import { getBigQueryClient, getBigQueryConfig, serializeBigQueryValue } from './bigquery';
 import { ScopeFilters } from './scopedOverview';
+import { resolveReportingWindows } from './reportingPeriod';
 
 export type SlaTimePeriod = '3M' | '6M' | 'YTD' | '12M';
 
@@ -426,8 +427,13 @@ export async function fetchSlaDiagnostic(
   const rawData2 = res2[0][0] || {};
 
   const repCtxRaw = rawData1.rep_ctx || {};
-  const latestClosedMonth: string = String(serializeBigQueryValue(repCtxRaw.Latest_Closed_Month) || '2026-07-01');
-  const reportingMonthLabel = String(repCtxRaw.Official_Reporting_Month || 'Jul-26');
+  const latestClosedMonthRaw = serializeBigQueryValue(repCtxRaw.Latest_Closed_Month);
+  if (!latestClosedMonthRaw) {
+    throw new Error('Authoritative reporting context unavailable: Latest_Closed_Month is empty in SLA Diagnostic');
+  }
+  const latestClosedMonth: string = String(latestClosedMonthRaw);
+  const resolvedPeriod = resolveReportingWindows(latestClosedMonth);
+  const reportingMonthLabel = String(repCtxRaw.Official_Reporting_Month || resolvedPeriod.officialReportingMonth);
 
   const headlineRaw = rawData1.headline || {};
   const totalAccounts = Number(headlineRaw.Total_Accounts) || 0;
@@ -558,14 +564,7 @@ export async function fetchSlaDiagnostic(
     };
   });
 
-  const requestedMonthCountMap: Record<SlaTimePeriod, number> = {
-    '3M': 3,
-    '6M': 6,
-    'YTD': 7, // Jan-26 to Jul-26
-    '12M': 12,
-  };
-
-  const requestedMonthCount = requestedMonthCountMap[requestedPeriod];
+  const requestedMonthCount = resolvedPeriod.windows[requestedPeriod].monthCount;
   const availableMonthCount = trend.length;
   const historyCoverageStatus: 'FULL_HISTORY' | 'PARTIAL_HISTORY' =
     availableMonthCount >= requestedMonthCount ? 'FULL_HISTORY' : 'PARTIAL_HISTORY';

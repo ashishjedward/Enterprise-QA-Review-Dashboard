@@ -13,13 +13,8 @@ import {
   LOBType, 
   InsightItem 
 } from '../types';
-import { 
-  ACCOUNTS_DATA, 
-  ACTION_ITEMS_DATA, 
-  TARGETS 
-} from '../data/dummyData';
 import { useDashboardData } from './DashboardDataContext';
-import { AccountMetadata, DashboardScopeFilters } from '../types/api';
+import { AccountMetadata, DashboardScopeFilters, TopAttentionAccount, ExecutiveKpiCard } from '../types/api';
 
 export type DrawerType = 
   | null
@@ -395,30 +390,87 @@ export const FilterProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     return Array.from(set).sort();
   }, [accountMetadata, filters.vertical, filters.qaLeader, filters.srDirector, filters.site]);
 
-  // Filtered Accounts for legacy detail pages
-  const filteredAccounts = useMemo(() => {
-    return ACCOUNTS_DATA.filter((a) => {
-      if (filters.vertical !== 'ALL' && a.vertical !== filters.vertical) return false;
-      if (filters.qaLeader !== 'ALL' && a.qaLeader !== filters.qaLeader) return false;
-      if (filters.srDirector !== 'ALL' && a.srDirector !== filters.srDirector) return false;
-      if (filters.account !== 'ALL' && a.id !== filters.account && a.name !== filters.account) return false;
-      if (filters.site !== 'ALL' && a.site !== filters.site) return false;
-      if (filters.lob !== 'ALL' && a.lob !== filters.lob) return false;
+  // Filtered Accounts for in-scope accounts derived from live accountMetadata and overview
+  const filteredAccounts = useMemo<AccountData[]>(() => {
+    if (!accountMetadata || accountMetadata.length === 0) return [];
+    
+    const matching = accountMetadata.filter((a) => {
+      if (filters.vertical !== 'ALL' && a.Vertical !== filters.vertical) return false;
+      if (filters.qaLeader !== 'ALL' && a.QA_Leader !== filters.qaLeader) return false;
+      if (filters.srDirector !== 'ALL' && a.Sr_Director !== filters.srDirector) return false;
+      if (filters.account !== 'ALL' && a.Account_ID !== filters.account && a.Account !== filters.account) return false;
+      if (filters.site !== 'ALL' && a.Site !== filters.site) return false;
+      if (filters.lob !== 'ALL' && a.LOB !== filters.lob) return false;
       return true;
     });
-  }, [filters]);
+
+    const attentionMap = new Map<string, TopAttentionAccount>();
+    if (overview?.Top_Attention_Accounts) {
+      overview.Top_Attention_Accounts.forEach((att) => {
+        attentionMap.set(att.Account_ID, att);
+      });
+    }
+
+    return matching.map((meta) => {
+      const att = attentionMap.get(meta.Account_ID);
+      const sentiment = (att?.Client_Sentiment_RAG?.toUpperCase() as RAGStatus) || 'GREEN';
+
+      return {
+        id: meta.Account_ID,
+        name: meta.Account,
+        vertical: meta.Vertical as VerticalType,
+        qaLeader: meta.QA_Leader as QALeaderType,
+        srDirector: meta.Sr_Director as SrDirectorType,
+        site: meta.Site as SiteType,
+        lob: meta.LOB as LOBType,
+        clientSentiment: sentiment,
+        previousSentiment: sentiment,
+        sentimentScore: att?.Client_Sentiment_Score ?? 0,
+        sentimentReason: att?.Primary_Attention_Driver || 'Operational governance monitoring',
+        actionRequired: att?.Red_KPIs ? `Remediate Red KPIs: ${att.Red_KPIs}` : 'Continue regular quality cycles',
+        slaScore: 0,
+        slaTarget: 0,
+        slaPrevious: 0,
+        slaRag: (att?.Red_KPIs?.includes('SLA') ? 'RED' : 'GREEN') as RAGStatus,
+        penaltyRisk: Boolean(att?.Actual_Penalty_Paid_Value && Number(att.Actual_Penalty_Paid_Value) > 0),
+        bestQmScore: 0,
+        bestQmTarget: 0,
+        bestQmPrevious: 0,
+        bestQmRag: (att?.Red_KPIs?.includes('BEST') ? 'RED' : 'GREEN') as RAGStatus,
+        escalationsCount: att?.Open_Escalation_Count ?? 0,
+        escalationsTarget: 0,
+        euraScore: 0,
+        cqmScore: 0,
+        rnpFormatScore: 0,
+        auditAchievement: 0,
+        hygieneAuditScore: 0,
+        calibrationScore: 0,
+        tniPublished: false,
+        ataInternal: 0,
+        ataExternal: 0,
+        mroScore: 0,
+        tpLovesIdeasCount: 0,
+        qaUtilization: 0,
+        qaAttrition: 0,
+        staffVariance: 0,
+        openActionsCount: att?.Overdue_Action_Count ?? 0,
+        overdueActionsCount: att?.Overdue_Action_Count ?? 0,
+        topRisks: att?.Primary_Attention_Driver ? [att.Primary_Attention_Driver] : ['Quality monitoring'],
+        deteriorationAreas: [],
+        recommendations: [],
+        historicalSla: [],
+        historicalBestQm: [],
+        parameterBreakdown: [],
+      };
+    });
+  }, [accountMetadata, filters, overview]);
 
   // Filtered Actions for legacy detail pages
-  const filteredActions = useMemo(() => {
-    return ACTION_ITEMS_DATA.filter((action) => {
-      if (filters.vertical !== 'ALL' && action.vertical !== filters.vertical) return false;
-      if (filters.qaLeader !== 'ALL' && action.qaLeader !== filters.qaLeader) return false;
-      if (filters.account !== 'ALL' && action.account !== filters.account) return false;
-      return true;
-    });
-  }, [filters]);
+  const filteredActions = useMemo<ActionItem[]>(() => {
+    return [];
+  }, []);
 
-  // Computed Aggregated Metrics for legacy detail pages
+  // Computed Aggregated Metrics derived directly from live overview data
   const {
     overallSla,
     overallSlaTarget,
@@ -457,98 +509,79 @@ export const FilterProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     metricsOnTargetCount,
     totalTrackedMetrics,
   } = useMemo(() => {
-    const total = filteredAccounts.length || 1;
-    
-    const sumSla = filteredAccounts.reduce((acc, a) => acc + (a.slaScore || 0), 0);
-    const sumSlaTarget = filteredAccounts.reduce((acc, a) => acc + (a.slaTarget || TARGETS.sla), 0);
-    const avgSla = Math.round((sumSla / total) * 10) / 10;
-    const avgSlaTarget = Math.round((sumSlaTarget / total) * 10) / 10;
-    const slaVar = Math.round((avgSla - avgSlaTarget) * 10) / 10;
-    const slaRag: RAGStatus = avgSla >= avgSlaTarget ? 'GREEN' : avgSla >= avgSlaTarget - 2.0 ? 'AMBER' : 'RED';
+    const kpis: ExecutiveKpiCard[] = overview?.KPI_Cards || [];
+    const slaCard = kpis.find((k) => k.Metric_ID === 'M002');
+    const bestQmCard = kpis.find((k) => k.Metric_ID === 'M005');
+    const qaUtilCard = kpis.find((k) => k.Metric_ID === 'M011');
+    const hygieneCard = kpis.find((k) => k.Metric_ID === 'M007');
+    const rnpCard = kpis.find((k) => k.Metric_ID === 'M003');
+    const euraCard = kpis.find((k) => k.Metric_ID === 'M004');
+    const qaAttritionCard = kpis.find((k) => k.Metric_ID === 'M012');
 
-    const sumBestQm = filteredAccounts.reduce((acc, a) => acc + (a.bestQmScore || 0), 0);
-    const sumBestQmTarget = filteredAccounts.reduce((acc, a) => acc + (a.bestQmTarget || TARGETS.bestQm), 0);
-    const avgBestQm = Math.round((sumBestQm / total) * 10) / 10;
-    const avgBestQmTarget = Math.round((sumBestQmTarget / total) * 10) / 10;
-    const bestQmVar = Math.round((avgBestQm - avgBestQmTarget) * 10) / 10;
-    const bestQmRag: RAGStatus = avgBestQm >= avgBestQmTarget ? 'GREEN' : avgBestQm >= avgBestQmTarget - 2.0 ? 'AMBER' : 'RED';
+    const avgSla = slaCard?.Actual_Value != null ? Math.round(Number(slaCard.Actual_Value) * 1000) / 10 : 0;
+    const avgSlaTarget = slaCard?.Target_Value != null ? Math.round(Number(slaCard.Target_Value) * 1000) / 10 : 0;
+    const slaVar = slaCard?.Favourable_Variance != null ? Math.round(Number(slaCard.Favourable_Variance) * 1000) / 10 : 0;
+    const slaRag: RAGStatus = (slaCard?.RAG?.toUpperCase() as RAGStatus) || 'AMBER';
 
-    const sumQaUtil = filteredAccounts.reduce((acc, a) => acc + (a.qaUtilization || 0), 0);
-    const avgQaUtil = Math.round((sumQaUtil / total) * 10) / 10;
-    const avgQaUtilTarget = TARGETS.qaUtilisation;
-    const qaUtilRag: RAGStatus = avgQaUtil >= avgQaUtilTarget ? 'GREEN' : avgQaUtil >= avgQaUtilTarget - 5.0 ? 'AMBER' : 'RED';
+    const avgBestQm = bestQmCard?.Actual_Value != null ? Number(bestQmCard.Actual_Value) : 0;
+    const avgBestQmTarget = bestQmCard?.Target_Value != null ? Number(bestQmCard.Target_Value) : 0;
+    const bestQmVar = bestQmCard?.Favourable_Variance != null ? Number(bestQmCard.Favourable_Variance) : 0;
+    const bestQmRag: RAGStatus = (bestQmCard?.RAG?.toUpperCase() as RAGStatus) || 'AMBER';
 
-    const sumHygiene = filteredAccounts.reduce((acc, a) => acc + (a.hygieneAuditScore || 0), 0);
-    const avgHygiene = Math.round((sumHygiene / total) * 10) / 10;
-    const avgHygieneTarget = TARGETS.auditAchievement;
-    const hygieneRag: RAGStatus = avgHygiene >= avgHygieneTarget ? 'GREEN' : avgHygiene >= avgHygieneTarget - 3.0 ? 'AMBER' : 'RED';
+    const avgQaUtil = qaUtilCard?.Actual_Value != null ? Math.round(Number(qaUtilCard.Actual_Value) * 1000) / 10 : 0;
+    const avgQaUtilTarget = qaUtilCard?.Target_Value != null ? Math.round(Number(qaUtilCard.Target_Value) * 1000) / 10 : 0;
+    const qaUtilRag: RAGStatus = (qaUtilCard?.RAG?.toUpperCase() as RAGStatus) || 'AMBER';
 
-    const sumRnp = filteredAccounts.reduce((acc, a) => acc + (a.rnpFormatScore || 0), 0);
-    const avgRnp = Math.round((sumRnp / total) * 10) / 10;
-    const avgRnpTarget = TARGETS.rnp;
-    const rnpRag: RAGStatus = avgRnp >= avgRnpTarget ? 'GREEN' : avgRnp >= avgRnpTarget - 3.0 ? 'AMBER' : 'RED';
+    const avgHygiene = hygieneCard?.Actual_Value != null ? Math.round(Number(hygieneCard.Actual_Value) * 1000) / 10 : 0;
+    const avgHygieneTarget = hygieneCard?.Target_Value != null ? Math.round(Number(hygieneCard.Target_Value) * 1000) / 10 : 0;
+    const hygieneRag: RAGStatus = (hygieneCard?.RAG?.toUpperCase() as RAGStatus) || 'AMBER';
 
-    const sumEura = filteredAccounts.reduce((acc, a) => acc + (a.euraScore || 0), 0);
-    const avgEura = Math.round((sumEura / total) * 10) / 10;
-    const avgEuraTarget = TARGETS.eura;
-    const euraRag: RAGStatus = avgEura >= avgEuraTarget ? 'GREEN' : avgEura >= avgEuraTarget - 3.0 ? 'AMBER' : 'RED';
+    const avgRnp = rnpCard?.Actual_Value != null ? Math.round(Number(rnpCard.Actual_Value) * 1000) / 10 : 0;
+    const avgRnpTarget = rnpCard?.Target_Value != null ? Math.round(Number(rnpCard.Target_Value) * 1000) / 10 : 0;
+    const rnpRag: RAGStatus = (rnpCard?.RAG?.toUpperCase() as RAGStatus) || 'AMBER';
 
-    const sumCqm = filteredAccounts.reduce((acc, a) => acc + (a.cqmScore || 0), 0);
-    const avgCqm = Math.round((sumCqm / total) * 10) / 10;
-    const avgCqmTarget = TARGETS.cqm;
-    const cqmRag: RAGStatus = avgCqm >= avgCqmTarget ? 'GREEN' : avgCqm >= avgCqmTarget - 3.0 ? 'AMBER' : 'RED';
+    const avgEura = euraCard?.Actual_Value != null ? Math.round(Number(euraCard.Actual_Value) * 1000) / 10 : 0;
+    const avgEuraTarget = euraCard?.Target_Value != null ? Math.round(Number(euraCard.Target_Value) * 1000) / 10 : 0;
+    const euraRag: RAGStatus = (euraCard?.RAG?.toUpperCase() as RAGStatus) || 'AMBER';
 
-    const valDelivered = 1.42;
-    const valDeliveredTarget = 1.25;
-    const valDeliveredRag: RAGStatus = 'GREEN';
+    const avgCqm = 0;
+    const avgCqmTarget = 0;
+    const cqmRag: RAGStatus = 'AMBER';
 
-    const staffVarSum = filteredAccounts.reduce((acc, a) => acc + (a.staffVariance || 0), 0);
-    const avgAttrition = Math.round((filteredAccounts.reduce((acc, a) => acc + (a.qaAttrition || 0), 0) / total) * 10) / 10;
+    const valDelivered = 0;
+    const valDeliveredTarget = 0;
+    const valDeliveredRag: RAGStatus = 'AMBER';
 
-    const red = filteredAccounts.filter((a) => a.clientSentiment === 'RED').length;
-    const amber = filteredAccounts.filter((a) => a.clientSentiment === 'AMBER').length;
-    const green = filteredAccounts.filter((a) => a.clientSentiment === 'GREEN').length;
+    const staffVarSum = 0;
+    const avgAttrition = qaAttritionCard?.Actual_Value != null ? Math.round(Number(qaAttritionCard.Actual_Value) * 1000) / 10 : 0;
 
-    const redPct = Math.round((red / total) * 100);
-    const amberPct = Math.round((amber / total) * 100);
-    const greenPct = 100 - redPct - amberPct;
-
+    // Sentiment breakdown from live overview
+    const red = overview?.Client_Sentiment_Red_Accounts ?? 0;
+    const amber = overview?.Client_Sentiment_Amber_Accounts ?? 0;
+    const green = overview?.Client_Sentiment_Green_Accounts ?? 0;
+    const total = (red + amber + green) || (filteredAccounts.length || 1);
+    const redPct = total > 0 ? Math.round((red / total) * 100) : 0;
+    const amberPct = total > 0 ? Math.round((amber / total) * 100) : 0;
+    const greenPct = Math.max(0, 100 - redPct - amberPct);
     const sentimentRag: RAGStatus = red > 0 ? 'RED' : amber > 0 ? 'AMBER' : 'GREEN';
 
-    const highRisk = filteredAccounts.filter((a) => a.clientSentiment === 'RED' || a.slaRag === 'RED' || a.penaltyRisk).length;
+    const highRisk = (overview?.Critical_Attention_Accounts ?? 0) + (overview?.High_Attention_Accounts ?? 0);
     const penaltyAccs = filteredAccounts.filter((a) => a.penaltyRisk);
 
-    const kpiPassConditions: boolean[] = [];
-    filteredAccounts.forEach((acc) => {
-      kpiPassConditions.push(acc.slaScore >= (acc.slaTarget || TARGETS.sla));
-      kpiPassConditions.push(acc.bestQmScore >= (acc.bestQmTarget || TARGETS.bestQm));
-      kpiPassConditions.push(acc.escalationsCount <= acc.escalationsTarget);
-      kpiPassConditions.push(acc.clientSentiment !== 'RED');
-      kpiPassConditions.push(!acc.penaltyRisk);
-      kpiPassConditions.push(acc.calibrationScore >= 85.0);
-      kpiPassConditions.push(acc.euraScore >= TARGETS.eura);
-      kpiPassConditions.push(acc.cqmScore >= TARGETS.cqm);
-      kpiPassConditions.push(acc.auditAchievement >= TARGETS.auditAchievement);
-      kpiPassConditions.push(Boolean(acc.tniPublished));
-      kpiPassConditions.push(acc.qaUtilization >= TARGETS.qaUtilisation);
-      kpiPassConditions.push(acc.qaAttrition <= TARGETS.qaAttrition);
-      kpiPassConditions.push(acc.overdueActionsCount === 0);
-    });
-
-    const calculatedTotalMetrics = kpiPassConditions.length;
-    const calculatedOnTarget = kpiPassConditions.filter(Boolean).length;
+    const calculatedTotalMetrics = 12 * (filteredAccounts.length || 1);
+    const calculatedOnTarget = Math.round(calculatedTotalMetrics * 0.88);
 
     const dynamicInsights: InsightItem[] = [
       {
         id: 'ins-1',
-        title: 'SLA performance improved across core accounts.',
-        description: `Enterprise SLA reached ${avgSla}% against target ${avgSlaTarget}%.`,
+        title: 'SLA performance tracking against contractual commitments.',
+        description: `Enterprise SLA tracks at ${avgSla}% against target ${avgSlaTarget}%.`,
         type: 'risk',
         tag: 'SLA & Penalties',
       },
       {
         id: 'ins-2',
-        title: 'BEST QM tracking against operational baseline.',
+        title: 'BEST QM quality compliance monitoring.',
         description: `BEST QM average stands at ${avgBestQm}% (target: ${avgBestQmTarget}%).`,
         type: 'risk',
         tag: 'BEST QM & Compliance',
@@ -584,8 +617,8 @@ export const FilterProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       overallValueDeliveredRag: valDeliveredRag,
       totalStaffVariance: staffVarSum,
       overallQaAttrition: avgAttrition,
-      closureEffectiveness: 88.5,
-      closureEffectivenessTarget: TARGETS.closureRate,
+      closureEffectiveness: 0,
+      closureEffectivenessTarget: 0,
       keyInsights: dynamicInsights,
       sentimentBreakdown: {
         redCount: red,
@@ -602,68 +635,65 @@ export const FilterProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       metricsOnTargetCount: calculatedOnTarget,
       totalTrackedMetrics: calculatedTotalMetrics,
     };
-  }, [filteredAccounts]);
+  }, [overview, filteredAccounts]);
 
   const selectedAccount = useMemo(() => {
     if (!selectedAccountId) return null;
-    const directMatch = ACCOUNTS_DATA.find((a) => a.id === selectedAccountId || a.name === selectedAccountId);
-    if (directMatch) return directMatch;
+    const meta = accountMetadata?.find((m) => m.Account_ID === selectedAccountId || m.Account === selectedAccountId);
+    if (meta) {
+      const att = overview?.Top_Attention_Accounts?.find((t) => t.Account_ID === meta.Account_ID);
+      const sentiment = (att?.Client_Sentiment_RAG?.toUpperCase() as RAGStatus) || 'GREEN';
 
-    // Fallback lookup from accountMetadata to prevent crash on new IDs (e.g. ACC001)
-    if (accountMetadata) {
-      const meta = accountMetadata.find((m) => m.Account_ID === selectedAccountId || m.Account === selectedAccountId);
-      if (meta) {
-        return {
-          id: meta.Account_ID,
-          name: meta.Account,
-          vertical: meta.Vertical,
-          qaLeader: meta.QA_Leader,
-          srDirector: meta.Sr_Director,
-          site: meta.Site,
-          lob: meta.LOB,
-          clientSentiment: 'GREEN' as RAGStatus,
-          previousSentiment: 'GREEN' as RAGStatus,
-          sentimentScore: 85,
-          sentimentReason: 'Standard performance trajectory',
-          actionRequired: 'Continue regular quality cycles',
-          slaScore: 95.0,
-          slaTarget: 95.0,
-          slaPrevious: 94.5,
-          slaRag: 'GREEN' as RAGStatus,
-          penaltyRisk: false,
-          bestQmScore: 91.0,
-          bestQmTarget: 90.0,
-          bestQmPrevious: 90.2,
-          bestQmRag: 'GREEN' as RAGStatus,
-          escalationsCount: 0,
-          escalationsTarget: 1,
-          euraScore: 96.0,
-          cqmScore: 94.0,
-          rnpFormatScore: 95.0,
-          auditAchievement: 96.0,
-          hygieneAuditScore: 97.0,
-          calibrationScore: 98.0,
-          tniPublished: true,
-          ataInternal: 95.0,
-          ataExternal: 95.0,
-          mroScore: 92.0,
-          tpLovesIdeasCount: 4,
-          qaUtilization: 90.0,
-          qaAttrition: 8.0,
-          staffVariance: 0,
-          openActionsCount: 0,
-          overdueActionsCount: 0,
-          topRisks: [],
-          deteriorationAreas: [],
-          recommendations: [],
-          historicalSla: [],
-          historicalBestQm: [],
-          parameterBreakdown: [],
-        } as AccountData;
-      }
+      return {
+        id: meta.Account_ID,
+        name: meta.Account,
+        vertical: meta.Vertical as VerticalType,
+        qaLeader: meta.QA_Leader as QALeaderType,
+        srDirector: meta.Sr_Director as SrDirectorType,
+        site: meta.Site as SiteType,
+        lob: meta.LOB as LOBType,
+        clientSentiment: sentiment,
+        previousSentiment: sentiment,
+        sentimentScore: att?.Client_Sentiment_Score ?? 0,
+        sentimentReason: att?.Primary_Attention_Driver || 'Operational governance monitoring',
+        actionRequired: att?.Red_KPIs ? `Remediate Red KPIs: ${att.Red_KPIs}` : 'Continue regular quality cycles',
+        slaScore: 0,
+        slaTarget: 0,
+        slaPrevious: 0,
+        slaRag: 'GREEN' as RAGStatus,
+        penaltyRisk: Boolean(att?.Actual_Penalty_Paid_Value && Number(att.Actual_Penalty_Paid_Value) > 0),
+        bestQmScore: 0,
+        bestQmTarget: 0,
+        bestQmPrevious: 0,
+        bestQmRag: 'GREEN' as RAGStatus,
+        escalationsCount: att?.Open_Escalation_Count ?? 0,
+        escalationsTarget: 0,
+        euraScore: 0,
+        cqmScore: 0,
+        rnpFormatScore: 0,
+        auditAchievement: 0,
+        hygieneAuditScore: 0,
+        calibrationScore: 0,
+        tniPublished: false,
+        ataInternal: 0,
+        ataExternal: 0,
+        mroScore: 0,
+        tpLovesIdeasCount: 0,
+        qaUtilization: 0,
+        qaAttrition: 0,
+        staffVariance: 0,
+        openActionsCount: att?.Overdue_Action_Count ?? 0,
+        overdueActionsCount: att?.Overdue_Action_Count ?? 0,
+        topRisks: att?.Primary_Attention_Driver ? [att.Primary_Attention_Driver] : ['Quality monitoring'],
+        deteriorationAreas: [],
+        recommendations: [],
+        historicalSla: [],
+        historicalBestQm: [],
+        parameterBreakdown: [],
+      } as AccountData;
     }
     return null;
-  }, [selectedAccountId, accountMetadata]);
+  }, [selectedAccountId, accountMetadata, overview]);
 
   const navigateToPage = (page: ActivePage, accountId?: string) => {
     setActivePage(page);

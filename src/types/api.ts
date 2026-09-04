@@ -672,13 +672,13 @@ export interface BestQmHeadline {
 
 export interface BestQmParameter {
   Parameter_Name: string;
-  Actual_Value: number;
+  Actual_Value: number | null;
   Actual_Display: string;
-  Target_Value: number;
+  Target_Value: number | null;
   Target_Display: string;
-  Variance_Value: number;
+  Variance_Value: number | null;
   Variance_Display: string;
-  RAG: 'Green' | 'Amber' | 'Red';
+  RAG: 'Green' | 'Amber' | 'Red' | null;
   Account_Count: number;
 }
 
@@ -687,7 +687,7 @@ export interface BestQmTrendPoint {
   Reporting_Month: string;
   Actual_Value: number | null;
   Actual_Display: string;
-  Target_Value: number;
+  Target_Value: number | null;
   Target_Display: string;
   Variance_Value: number | null;
   Variance_Display: string;
@@ -698,13 +698,13 @@ export interface BestQmTrendPoint {
 export interface BestQmComparisonItem {
   Dimension_Key: string;
   Dimension_Label: string;
-  Actual_Value: number;
+  Actual_Value: number | null;
   Actual_Display: string;
-  Target_Value: number;
+  Target_Value: number | null;
   Target_Display: string;
-  Variance_Value: number;
+  Variance_Value: number | null;
   Variance_Display: string;
-  RAG: 'Green' | 'Amber' | 'Red';
+  RAG: 'Green' | 'Amber' | 'Red' | null;
   Account_Count: number;
 }
 
@@ -729,13 +729,13 @@ export interface BestQmAccountRow {
   Sr_Director: string;
   Site: string;
   LOB: string;
-  Actual_Value: number;
+  Actual_Value: number | null;
   Actual_Display: string;
-  Target_Value: number;
+  Target_Value: number | null;
   Target_Display: string;
-  Variance_Value: number;
+  Variance_Value: number | null;
   Variance_Display: string;
-  RAG: 'Green' | 'Amber' | 'Red';
+  RAG: 'Green' | 'Amber' | 'Red' | null;
   Parameters: BestQmAccountRowParameter[];
   LD_Remarks: string | null;
 }

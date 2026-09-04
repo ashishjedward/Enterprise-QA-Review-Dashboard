@@ -98,7 +98,7 @@ export const HygieneDrawer: React.FC = () => {
         {/* Footer */}
         <div className="p-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
           <span className="text-[11px] text-slate-500">
-            {selectedAccount ? `Selected Account: ${selectedAccount}` : 'Scope: Enterprise'}
+            {selectedAccount ? `Selected Account: ${typeof selectedAccount === 'string' ? selectedAccount : (selectedAccount.name || selectedAccount.id)}` : 'Scope: Enterprise'}
           </span>
           <button
             onClick={closeDrawer}

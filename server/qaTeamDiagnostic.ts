@@ -1,5 +1,6 @@
 import { BigQuery } from '@google-cloud/bigquery';
 import { getBigQueryClient, getBigQueryConfig, serializeBigQueryValue } from './bigquery';
+import { fetchAuthoritativeReportingContext } from './reportingPeriod';
 
 export type QaTeamTimePeriod = '3M' | '6M' | 'YTD' | '12M';
 
@@ -205,44 +206,17 @@ export async function fetchQaTeamDiagnostic(filters: QaTeamFilters): Promise<QaT
   const bq = getBigQueryClient();
   const { projectId, dataset, location } = getBigQueryConfig();
 
-  // 1. Fetch reporting context
-  const [ctxRows] = await bq.query({
-    query: `SELECT * FROM \`${projectId}.${dataset}.vw_reporting_context\` LIMIT 1`,
-    location,
-  });
+  // 1. Fetch authoritative reporting context & dynamic time windows
+  const authCtx = await fetchAuthoritativeReportingContext(bq, projectId, dataset, location);
+  const latestClosedMonth = authCtx.latestClosedMonth;
+  const latestAvailableMonth = authCtx.latestAvailableMonth;
+  const currentOpenMonth = authCtx.currentOpenMonth;
+  const submissionDeadline = authCtx.currentSubmissionDeadline;
+  const officialReportingMonth = authCtx.officialReportingMonth;
 
-  const repCtxRaw = ctxRows && ctxRows.length > 0 ? ctxRows[0] : null;
-  const latestClosedMonth = repCtxRaw?.Latest_Closed_Month ? parseDateValue(repCtxRaw.Latest_Closed_Month) : '2026-07-01';
-  const latestAvailableMonth = repCtxRaw?.Latest_Available_Month ? parseDateValue(repCtxRaw.Latest_Available_Month) : '2026-08-01';
-  const currentOpenMonth = repCtxRaw?.Current_Open_Month ? parseDateValue(repCtxRaw.Current_Open_Month) : '2026-08-01';
-  const submissionDeadline = repCtxRaw?.Current_Submission_Deadline ? parseDateValue(repCtxRaw.Current_Submission_Deadline) : '2026-09-05';
-  const officialReportingMonth = formatMonthDisplay(latestClosedMonth);
-
-  // Determine historical range
-  let requestedMonthCount = 12;
-  let historyStartMonth = '2025-08-01';
-
-  const closedDate = new Date(`${latestClosedMonth}T00:00:00Z`);
-  const closedYear = closedDate.getUTCFullYear();
-  const closedMonth = closedDate.getUTCMonth(); // 0-indexed (6 = July)
-
-  if (period === '3M') {
-    requestedMonthCount = 3;
-    const startD = new Date(Date.UTC(closedYear, closedMonth - 2, 1));
-    historyStartMonth = startD.toISOString().split('T')[0];
-  } else if (period === '6M') {
-    requestedMonthCount = 6;
-    const startD = new Date(Date.UTC(closedYear, closedMonth - 5, 1));
-    historyStartMonth = startD.toISOString().split('T')[0];
-  } else if (period === 'YTD') {
-    requestedMonthCount = closedMonth + 1; // e.g. July is 7
-    historyStartMonth = `${closedYear}-01-01`;
-  } else {
-    // 12M
-    requestedMonthCount = 12;
-    const startD = new Date(Date.UTC(closedYear, closedMonth - 11, 1));
-    historyStartMonth = startD.toISOString().split('T')[0];
-  }
+  const resolvedWindow = authCtx.windows[period];
+  const requestedMonthCount = resolvedWindow.monthCount;
+  const historyStartMonth = resolvedWindow.startMonth;
 
   // Filter params setup
   const params: Record<string, any> = {
@@ -443,17 +417,32 @@ export async function fetchQaTeamDiagnostic(filters: QaTeamFilters): Promise<QaT
     FROM scoped_accounts sa
   `;
 
-  // Execute all 4 queries in parallel
+  // QUERY 5: Executive Rollup for M011 and M012
+  const queryExec = `
+    SELECT
+      Metric_ID,
+      Actual_Value,
+      Actual_Display,
+      Target_Value,
+      CONCAT(CAST(ROUND(Target_Value * 100, 1) AS STRING), '%') AS Target_Display,
+      Aggregate_RAG
+    FROM \`${projectId}.${dataset}.vw_executive_kpi_official\`
+    WHERE Metric_ID IN ('M011', 'M012')
+  `;
+
+  // Execute all queries in parallel
   const [
     [registerRows],
     [trendRows],
     [siteRows],
     [bandRows],
+    [execRows],
   ] = await Promise.all([
     bq.query({ query: query1, params, location }),
     bq.query({ query: query2, params, location }),
     bq.query({ query: query3, params, location }),
     bq.query({ query: query4, params, location }),
+    bq.query({ query: queryExec, location }),
   ]);
 
   const totalAccounts = registerRows ? registerRows.length : 0;
@@ -513,7 +502,7 @@ export async function fetchQaTeamDiagnostic(filters: QaTeamFilters): Promise<QaT
       else balancedAccountCount++;
     }
 
-    // Utilization
+    // Utilization (M011)
     const prodHrs = serialized.Productive_Hrs !== null && serialized.Productive_Hrs !== undefined ? Number(serialized.Productive_Hrs) : null;
     const staffHrs = serialized.Staff_Hrs !== null && serialized.Staff_Hrs !== undefined ? Number(serialized.Staff_Hrs) : null;
     if (prodHrs !== null) totalProductiveHrs += prodHrs;
@@ -521,21 +510,13 @@ export async function fetchQaTeamDiagnostic(filters: QaTeamFilters): Promise<QaT
 
     const utilPct = serialized.Utilization_Pct !== null && serialized.Utilization_Pct !== undefined ? Number(serialized.Utilization_Pct) : null;
     const utilDisplay = utilPct !== null ? `${(utilPct * 100).toFixed(1)}%` : 'N/A';
-    let utilRag: 'Green' | 'Amber' | 'Red' | null = null;
-    if (utilPct !== null) {
-      if (utilPct >= 0.90) {
-        utilRag = 'Green';
-        m011GreenCount++;
-      } else if (utilPct >= 0.85) {
-        utilRag = 'Amber';
-        m011AmberCount++;
-      } else {
-        utilRag = 'Red';
-        m011RedCount++;
-      }
-    }
+    // Authoritative RAG directly from vw_qa_utilization
+    const utilRag = (serialized.Utilization_Status_RAG as 'Green' | 'Amber' | 'Red') || null;
+    if (utilRag === 'Green') m011GreenCount++;
+    else if (utilRag === 'Amber') m011AmberCount++;
+    else if (utilRag === 'Red') m011RedCount++;
 
-    // Attrition
+    // Attrition (M012)
     const exits = serialized.Exits !== null && serialized.Exits !== undefined ? Number(serialized.Exits) : null;
     const openingHc = serialized.Opening_HC !== null && serialized.Opening_HC !== undefined ? Number(serialized.Opening_HC) : null;
     if (exits !== null) totalExits += exits;
@@ -543,19 +524,11 @@ export async function fetchQaTeamDiagnostic(filters: QaTeamFilters): Promise<QaT
 
     const attrPct = serialized.Annualized_Attrition_Pct !== null && serialized.Annualized_Attrition_Pct !== undefined ? Number(serialized.Annualized_Attrition_Pct) : null;
     const attrDisplay = attrPct !== null ? `${(attrPct * 100).toFixed(1)}%` : 'N/A';
-    let attrRag: 'Green' | 'Amber' | 'Red' | null = null;
-    if (attrPct !== null) {
-      if (attrPct <= 0.10) {
-        attrRag = 'Green';
-        m012GreenCount++;
-      } else if (attrPct <= 0.15) {
-        attrRag = 'Amber';
-        m012AmberCount++;
-      } else {
-        attrRag = 'Red';
-        m012RedCount++;
-      }
-    }
+    // Authoritative RAG directly from vw_qa_attrition
+    const attrRag = (serialized.Attrition_Status_RAG as 'Green' | 'Amber' | 'Red') || null;
+    if (attrRag === 'Green') m012GreenCount++;
+    else if (attrRag === 'Amber') m012AmberCount++;
+    else if (attrRag === 'Red') m012RedCount++;
 
     // Billing
     const billable = serialized.Billable_FTE !== null && serialized.Billable_FTE !== undefined ? Number(serialized.Billable_FTE) : null;
@@ -565,8 +538,9 @@ export async function fetchQaTeamDiagnostic(filters: QaTeamFilters): Promise<QaT
 
     const billCov = serialized.Billing_Coverage_Pct !== null && serialized.Billing_Coverage_Pct !== undefined ? Number(serialized.Billing_Coverage_Pct) : null;
     const billDisplay = billCov !== null ? `${(billCov * 100).toFixed(1)}%` : 'N/A';
-    let billRag: 'Green' | 'Amber' | 'Red' | null = null;
-    if (billCov !== null) {
+    // NON-GOVERNED LOCAL LOGIC: Commercial billing coverage has no official Metric_ID in Metric_Master/vw_kpi_snapshot_official; uses vw_billed_qa Status_RAG when present or retained product logic.
+    let billRag: 'Green' | 'Amber' | 'Red' | null = (serialized.Billing_Status_RAG as 'Green' | 'Amber' | 'Red') || null;
+    if (!billRag && billCov !== null) {
       if (billCov >= 0.95) billRag = 'Green';
       else if (billCov >= 0.90) billRag = 'Amber';
       else billRag = 'Red';
@@ -618,34 +592,49 @@ export async function fetchQaTeamDiagnostic(filters: QaTeamFilters): Promise<QaT
   const staffingVarianceDisplay = staffingVariance > 0 ? `+${staffingVariance}` : `${staffingVariance}`;
 
   // M011 Headline
+  const m011Exec = (execRows || []).find((r: any) => r.Metric_ID === 'M011');
   const m011Actual = totalStaffHrs > 0 ? (totalProductiveHrs / totalStaffHrs) : null;
   const m011Display = m011Actual !== null ? `${(m011Actual * 100).toFixed(1)}%` : 'N/A';
-  const m011Target = 0.90;
+  const m011Target = m011Exec?.Target_Value != null ? Number(m011Exec.Target_Value) : 0.90;
   const m011VarianceToTarget = m011Actual !== null ? (m011Actual - m011Target) : null;
   const m011FavourableVariance = m011VarianceToTarget;
   let m011Rag: 'Green' | 'Amber' | 'Red' | null = null;
-  if (m011Actual !== null) {
-    if (m011Actual >= 0.90) m011Rag = 'Green';
-    else if (m011Actual >= 0.85) m011Rag = 'Amber';
-    else m011Rag = 'Red';
+  if (totalAccounts === 1 && accountRegister[0]) {
+    m011Rag = accountRegister[0].utilizationRag;
+  } else if (m011Exec?.Aggregate_RAG && totalAccounts >= 190) {
+    m011Rag = m011Exec.Aggregate_RAG as 'Green' | 'Amber' | 'Red';
+  } else if (m011RedCount > m011GreenCount && m011RedCount > m011AmberCount) {
+    m011Rag = 'Red';
+  } else if (m011AmberCount >= m011GreenCount) {
+    m011Rag = 'Amber';
+  } else if (m011GreenCount > 0) {
+    m011Rag = 'Green';
   }
 
   // M012 Headline
+  const m012Exec = (execRows || []).find((r: any) => r.Metric_ID === 'M012');
   const m012Actual = totalOpeningHc > 0 ? ((totalExits / totalOpeningHc) * 12) : null;
   const m012Display = m012Actual !== null ? `${(m012Actual * 100).toFixed(1)}%` : 'N/A';
-  const m012Target = 0.10;
+  const m012Target = m012Exec?.Target_Value != null ? Number(m012Exec.Target_Value) : 0.10;
   const m012VarianceToTarget = m012Actual !== null ? (m012Actual - m012Target) : null;
   const m012FavourableVariance = m012Actual !== null ? (m012Target - m012Actual) : null;
   let m012Rag: 'Green' | 'Amber' | 'Red' | null = null;
-  if (m012Actual !== null) {
-    if (m012Actual <= 0.10) m012Rag = 'Green';
-    else if (m012Actual <= 0.15) m012Rag = 'Amber';
-    else m012Rag = 'Red';
+  if (totalAccounts === 1 && accountRegister[0]) {
+    m012Rag = accountRegister[0].attritionRag;
+  } else if (m012Exec?.Aggregate_RAG && totalAccounts >= 190) {
+    m012Rag = m012Exec.Aggregate_RAG as 'Green' | 'Amber' | 'Red';
+  } else if (m012RedCount > m012GreenCount && m012RedCount > m012AmberCount) {
+    m012Rag = 'Red';
+  } else if (m012AmberCount >= m012GreenCount) {
+    m012Rag = 'Amber';
+  } else if (m012GreenCount > 0) {
+    m012Rag = 'Green';
   }
 
   // Commercial Headline
   const billingCoverage = totalBillableFte > 0 ? (totalBilledFte / totalBillableFte) : null;
   const billingCoverageDisplay = billingCoverage !== null ? `${(billingCoverage * 100).toFixed(1)}%` : 'N/A';
+  // NON-GOVERNED LOCAL LOGIC: Commercial billing coverage has no official Metric_ID in Metric_Master/vw_kpi_snapshot_official; retained temporarily as un-governed product logic.
   let billingRag: 'Green' | 'Amber' | 'Red' | null = null;
   if (billingCoverage !== null) {
     if (billingCoverage >= 0.95) billingRag = 'Green';
@@ -662,21 +651,13 @@ export async function fetchQaTeamDiagnostic(filters: QaTeamFilters): Promise<QaT
 
     const sUtil = sSer.Site_Utilization !== null && sSer.Site_Utilization !== undefined ? Number(sSer.Site_Utilization) : null;
     const sUtilDisplay = sUtil !== null ? `${(sUtil * 100).toFixed(1)}%` : 'N/A';
-    let sUtilRag: 'Green' | 'Amber' | 'Red' | null = null;
-    if (sUtil !== null) {
-      if (sUtil >= 0.90) sUtilRag = 'Green';
-      else if (sUtil >= 0.85) sUtilRag = 'Amber';
-      else sUtilRag = 'Red';
-    }
+    // Authoritative semantic RAG is unavailable at site level for M011; return null per governance principle
+    const sUtilRag: 'Green' | 'Amber' | 'Red' | null = null;
 
     const sAttr = sSer.Site_Attrition !== null && sSer.Site_Attrition !== undefined ? Number(sSer.Site_Attrition) : null;
     const sAttrDisplay = sAttr !== null ? `${(sAttr * 100).toFixed(1)}%` : 'N/A';
-    let sAttrRag: 'Green' | 'Amber' | 'Red' | null = null;
-    if (sAttr !== null) {
-      if (sAttr <= 0.10) sAttrRag = 'Green';
-      else if (sAttr <= 0.15) sAttrRag = 'Amber';
-      else sAttrRag = 'Red';
-    }
+    // Authoritative semantic RAG is unavailable at site level for M012; return null per governance principle
+    const sAttrRag: 'Green' | 'Amber' | 'Red' | null = null;
 
     const sBill = sSer.Site_Billing_Coverage !== null && sSer.Site_Billing_Coverage !== undefined ? Number(sSer.Site_Billing_Coverage) : null;
     const sBillDisplay = sBill !== null ? `${(sBill * 100).toFixed(1)}%` : 'N/A';

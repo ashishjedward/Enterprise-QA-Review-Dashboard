@@ -1,18 +1,19 @@
 import { TimePeriod, MetricTrendPoint } from '../types';
-import { FULL_12_MONTHS } from '../data/dummyData';
+
+export const FULL_12_MONTHS = ['Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug'] as const;
 
 /**
  * Returns the month labels for the selected time period.
  */
-export function getMonthsForPeriod(period: TimePeriod): string[] {
+export function getMonthsForPeriod(period: TimePeriod): typeof FULL_12_MONTHS[number][] {
   switch (period) {
     case '3M':
-      return FULL_12_MONTHS.slice(-3);
+      return [...FULL_12_MONTHS.slice(-3)];
     case '6M':
-      return FULL_12_MONTHS.slice(-6);
+      return [...FULL_12_MONTHS.slice(-6)];
     case 'YTD': {
       const janIndex = FULL_12_MONTHS.indexOf('Jan');
-      return janIndex >= 0 ? FULL_12_MONTHS.slice(janIndex) : FULL_12_MONTHS.slice(-8);
+      return janIndex >= 0 ? [...FULL_12_MONTHS.slice(janIndex)] : [...FULL_12_MONTHS.slice(-8)];
     }
     case '12M':
     default:

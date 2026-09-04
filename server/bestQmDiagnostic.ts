@@ -1,5 +1,6 @@
 import { getBigQueryClient, getBigQueryConfig, serializeBigQueryValue } from './bigquery';
 import { ScopeFilters } from './scopedOverview';
+import { fetchAuthoritativeReportingContext, ReportingPeriodKey } from './reportingPeriod';
 
 export type BestQmTimePeriod = '3M' | '6M' | 'YTD' | '12M';
 
@@ -47,13 +48,13 @@ export interface BestQmHeadline {
 
 export interface BestQmParameter {
   Parameter_Name: string;
-  Actual_Value: number;
+  Actual_Value: number | null;
   Actual_Display: string;
-  Target_Value: number;
+  Target_Value: number | null;
   Target_Display: string;
-  Variance_Value: number;
+  Variance_Value: number | null;
   Variance_Display: string;
-  RAG: 'Green' | 'Amber' | 'Red';
+  RAG: 'Green' | 'Amber' | 'Red' | null;
   Account_Count: number;
 }
 
@@ -62,7 +63,7 @@ export interface BestQmTrendPoint {
   Reporting_Month: string;
   Actual_Value: number | null;
   Actual_Display: string;
-  Target_Value: number;
+  Target_Value: number | null;
   Target_Display: string;
   Variance_Value: number | null;
   Variance_Display: string;
@@ -73,13 +74,13 @@ export interface BestQmTrendPoint {
 export interface BestQmComparisonItem {
   Dimension_Key: string;
   Dimension_Label: string;
-  Actual_Value: number;
+  Actual_Value: number | null;
   Actual_Display: string;
-  Target_Value: number;
+  Target_Value: number | null;
   Target_Display: string;
-  Variance_Value: number;
+  Variance_Value: number | null;
   Variance_Display: string;
-  RAG: 'Green' | 'Amber' | 'Red';
+  RAG: 'Green' | 'Amber' | 'Red' | null;
   Account_Count: number;
 }
 
@@ -104,13 +105,13 @@ export interface BestQmAccountRow {
   Sr_Director: string;
   Site: string;
   LOB: string;
-  Actual_Value: number;
+  Actual_Value: number | null;
   Actual_Display: string;
-  Target_Value: number;
+  Target_Value: number | null;
   Target_Display: string;
-  Variance_Value: number;
+  Variance_Value: number | null;
   Variance_Display: string;
-  RAG: 'Green' | 'Amber' | 'Red';
+  RAG: 'Green' | 'Amber' | 'Red' | null;
   Parameters: BestQmAccountRowParameter[];
   LD_Remarks: string | null;
 }
@@ -139,13 +140,6 @@ function formatVarianceScore(val: number | null | undefined): string {
   if (val === null || val === undefined || isNaN(val)) return 'N/A';
   const sign = val > 0 ? '+' : '';
   return `${sign}${val.toFixed(1)}`;
-}
-
-function computeBestQmRag(val: number | null | undefined): 'Green' | 'Amber' | 'Red' | null {
-  if (val === null || val === undefined || isNaN(val)) return null;
-  if (val >= 90.0) return 'Green';
-  if (val >= 85.0) return 'Amber';
-  return 'Red';
 }
 
 export async function fetchBestQmDiagnostic(
@@ -203,32 +197,10 @@ export async function fetchBestQmDiagnostic(
   const whereClause = conditions.length > 0 ? conditions.join(' AND ') : '1=1';
 
   // 1. Get Reporting Context first to anchor dates
-  const contextQuery = `
-    SELECT 
-      Latest_Closed_Month, 
-      FORMAT_DATE('%b-%y', Latest_Closed_Month) AS Official_Reporting_Month
-    FROM \`${projectId}.${dataset}.vw_reporting_context\`
-    LIMIT 1
-  `;
-  const [contextRows] = await bq.query({ query: contextQuery, location });
-  const latestClosedMonthRaw = contextRows[0]?.Latest_Closed_Month;
-  const latestClosedMonthStr = typeof latestClosedMonthRaw === 'object' && latestClosedMonthRaw?.value
-    ? latestClosedMonthRaw.value
-    : String(latestClosedMonthRaw || '2026-07-01');
-  const reportingMonthLabel = contextRows[0]?.Official_Reporting_Month || 'Jul-26';
-
-  // Calculate Range Window month count based on latestClosedMonthStr
-  const [latestYear, latestMonthNum] = latestClosedMonthStr.split('-').map(Number);
-  let requestedMonthCount = 12;
-  if (requestedPeriod === '3M') {
-    requestedMonthCount = 3;
-  } else if (requestedPeriod === '6M') {
-    requestedMonthCount = 6;
-  } else if (requestedPeriod === 'YTD') {
-    requestedMonthCount = latestMonthNum;
-  } else if (requestedPeriod === '12M') {
-    requestedMonthCount = 12;
-  }
+  const authCtx = await fetchAuthoritativeReportingContext(bq, projectId, dataset, location);
+  const latestClosedMonthStr = authCtx.latestClosedMonth;
+  const reportingMonthLabel = authCtx.officialReportingMonth;
+  const requestedMonthCount = authCtx.windows[requestedPeriod]?.monthCount || 12;
 
   // QUERY 1: Snapshot (Headline, Parameters, Cohort Comparisons, Account Rows)
   const query1 = `
@@ -261,13 +233,9 @@ export async function fetchBestQmDiagnostic(
         ANY_VALUE(a.Site) AS Site,
         ANY_VALUE(a.LOB) AS LOB,
         AVG(b.Final_Score) AS Actual_Value,
-        90.0 AS Target_Value,
-        AVG(b.Final_Score) - 90.0 AS Variance_Value,
-        CASE 
-          WHEN AVG(b.Final_Score) >= 90.0 THEN 'Green'
-          WHEN AVG(b.Final_Score) >= 85.0 THEN 'Amber'
-          ELSE 'Red'
-        END AS RAG,
+        ANY_VALUE(k.Target_Value) AS Target_Value,
+        AVG(b.Final_Score) - ANY_VALUE(k.Target_Value) AS Variance_Value,
+        ANY_VALUE(k.Effective_RAG) AS RAG,
         ARRAY_AGG(
           STRUCT(
             b.Parameter AS Parameter_Name,
@@ -280,37 +248,44 @@ export async function fetchBestQmDiagnostic(
       FROM \`${projectId}.${dataset}.vw_best_qm\` b
       JOIN scoped_accounts a ON b.Account_ID = a.Account_ID
       CROSS JOIN rep_context rc
+      LEFT JOIN \`${projectId}.${dataset}.vw_kpi_snapshot_official\` k
+        ON b.Account_ID = k.Account_ID AND k.Metric_ID = 'M005' AND CAST(k.Month AS STRING) = CAST(rc.Latest_Closed_Month AS STRING)
       WHERE b.Month = rc.Latest_Closed_Month
       GROUP BY b.Account_ID
     ),
     headline_stats AS (
       SELECT
         COUNT(*) AS Total_Accounts,
-        COALESCE(AVG(Actual_Value), 0) AS Actual_Value,
-        90.0 AS Target_Value,
-        COALESCE(AVG(Actual_Value) - 90.0, 0) AS Variance_Value,
-        COUNTIF(Actual_Value >= 90.0) AS Accounts_On_Target,
-        COUNTIF(RAG = 'Green') AS Green_Account_Count,
-        COUNTIF(RAG = 'Amber') AS Amber_Account_Count,
-        COUNTIF(RAG = 'Red') AS Red_Account_Count,
-        ARRAY_AGG(IF(RAG = 'Red', Account_Name, NULL) IGNORE NULLS) AS Critical_Deficit_Names
-      FROM account_best_qm
+        AVG(a.Actual_Value) AS Actual_Value,
+        ANY_VALUE(e.Target_Value) AS Target_Value,
+        AVG(a.Actual_Value) - ANY_VALUE(e.Target_Value) AS Variance_Value,
+        COUNTIF(a.Actual_Value >= e.Target_Value) AS Accounts_On_Target,
+        COUNTIF(a.RAG = 'Green') AS Green_Account_Count,
+        COUNTIF(a.RAG = 'Amber') AS Amber_Account_Count,
+        COUNTIF(a.RAG = 'Red') AS Red_Account_Count,
+        ANY_VALUE(e.Aggregate_RAG) AS Headline_RAG,
+        ARRAY_AGG(IF(a.RAG = 'Red', a.Account_Name, NULL) IGNORE NULLS) AS Critical_Deficit_Names
+      FROM account_best_qm a
+      LEFT JOIN \`${projectId}.${dataset}.vw_executive_kpi_official\` e
+        ON e.Metric_ID = 'M005'
     ),
     parameters_summary AS (
       SELECT
         b.Parameter AS Parameter_Name,
         AVG(b.Final_Score) AS Actual_Value,
-        90.0 AS Target_Value,
-        AVG(b.Final_Score) - 90.0 AS Variance_Value,
+        ANY_VALUE(e.Target_Value) AS Target_Value,
+        AVG(b.Final_Score) - ANY_VALUE(e.Target_Value) AS Variance_Value,
         CASE 
-          WHEN AVG(b.Final_Score) >= 90.0 THEN 'Green'
-          WHEN AVG(b.Final_Score) >= 85.0 THEN 'Amber'
-          ELSE 'Red'
+          WHEN COUNTIF(b.Status_RAG = 'Red') > COUNTIF(b.Status_RAG = 'Green') THEN 'Red'
+          WHEN COUNTIF(b.Status_RAG = 'Amber') >= COUNTIF(b.Status_RAG = 'Green') THEN 'Amber'
+          ELSE 'Green'
         END AS RAG,
         COUNT(DISTINCT b.Account_ID) AS Account_Count
       FROM \`${projectId}.${dataset}.vw_best_qm\` b
       JOIN scoped_accounts a ON b.Account_ID = a.Account_ID
       CROSS JOIN rep_context rc
+      LEFT JOIN \`${projectId}.${dataset}.vw_executive_kpi_official\` e
+        ON e.Metric_ID = 'M005'
       WHERE b.Month = rc.Latest_Closed_Month
       GROUP BY b.Parameter
       ORDER BY b.Parameter ASC
@@ -320,8 +295,13 @@ export async function fetchBestQmDiagnostic(
         Vertical AS Dimension_Key,
         Vertical AS Dimension_Label,
         AVG(Actual_Value) AS Actual_Value,
-        90.0 AS Target_Value,
-        AVG(Actual_Value) - 90.0 AS Variance_Value,
+        ANY_VALUE(Target_Value) AS Target_Value,
+        AVG(Actual_Value) - ANY_VALUE(Target_Value) AS Variance_Value,
+        CASE
+          WHEN COUNTIF(RAG = 'Red') > COUNTIF(RAG = 'Green') THEN 'Red'
+          WHEN COUNTIF(RAG = 'Amber') >= COUNTIF(RAG = 'Green') THEN 'Amber'
+          ELSE 'Green'
+        END AS RAG,
         COUNT(*) AS Account_Count
       FROM account_best_qm
       GROUP BY Vertical
@@ -332,8 +312,13 @@ export async function fetchBestQmDiagnostic(
         QA_Leader AS Dimension_Key,
         QA_Leader AS Dimension_Label,
         AVG(Actual_Value) AS Actual_Value,
-        90.0 AS Target_Value,
-        AVG(Actual_Value) - 90.0 AS Variance_Value,
+        ANY_VALUE(Target_Value) AS Target_Value,
+        AVG(Actual_Value) - ANY_VALUE(Target_Value) AS Variance_Value,
+        CASE
+          WHEN COUNTIF(RAG = 'Red') > COUNTIF(RAG = 'Green') THEN 'Red'
+          WHEN COUNTIF(RAG = 'Amber') >= COUNTIF(RAG = 'Green') THEN 'Amber'
+          ELSE 'Green'
+        END AS RAG,
         COUNT(*) AS Account_Count
       FROM account_best_qm
       GROUP BY QA_Leader
@@ -344,8 +329,13 @@ export async function fetchBestQmDiagnostic(
         Sr_Director AS Dimension_Key,
         Sr_Director AS Dimension_Label,
         AVG(Actual_Value) AS Actual_Value,
-        90.0 AS Target_Value,
-        AVG(Actual_Value) - 90.0 AS Variance_Value,
+        ANY_VALUE(Target_Value) AS Target_Value,
+        AVG(Actual_Value) - ANY_VALUE(Target_Value) AS Variance_Value,
+        CASE
+          WHEN COUNTIF(RAG = 'Red') > COUNTIF(RAG = 'Green') THEN 'Red'
+          WHEN COUNTIF(RAG = 'Amber') >= COUNTIF(RAG = 'Green') THEN 'Amber'
+          ELSE 'Green'
+        END AS RAG,
         COUNT(*) AS Account_Count
       FROM account_best_qm
       GROUP BY Sr_Director
@@ -394,15 +384,20 @@ export async function fetchBestQmDiagnostic(
     ),
     monthly_trend AS (
       SELECT
-        Month,
-        FORMAT_DATE('%b-%y', Month) AS Reporting_Month,
-        AVG(Account_Score) AS Actual_Value,
-        90.0 AS Target_Value,
-        AVG(Account_Score) - 90.0 AS Variance_Value,
-        COUNT(DISTINCT Account_ID) AS Account_Count
-      FROM account_monthly
-      GROUP BY Month
-      ORDER BY Month ASC
+        m.Month,
+        FORMAT_DATE('%b-%y', m.Month) AS Reporting_Month,
+        AVG(m.Account_Score) AS Actual_Value,
+        ANY_VALUE(e.Target_Value) AS Target_Value,
+        AVG(m.Account_Score) - ANY_VALUE(e.Target_Value) AS Variance_Value,
+        COUNT(DISTINCT m.Account_ID) AS Account_Count,
+        ANY_VALUE(v.Source_RAG) AS RAG
+      FROM account_monthly m
+      LEFT JOIN \`${projectId}.${dataset}.vw_kpi_value_base\` v
+        ON m.Account_ID = v.Account_ID AND v.Metric_ID = 'M005' AND m.Month = v.Month
+      LEFT JOIN \`${projectId}.${dataset}.vw_executive_kpi_official\` e
+        ON e.Metric_ID = 'M005'
+      GROUP BY m.Month
+      ORDER BY m.Month ASC
     )
     SELECT
       (SELECT Start_Month FROM period_boundary) AS Start_Month,
@@ -438,7 +433,7 @@ export async function fetchBestQmDiagnostic(
       Actual_Value: null,
       Actual_Display: 'N/A',
       Target_Value: null,
-      Target_Display: '90',
+      Target_Display: 'N/A',
       Variance_Value: null,
       Variance_Display: 'N/A',
       RAG: null,
@@ -451,10 +446,11 @@ export async function fetchBestQmDiagnostic(
       Critical_Deficit_Names: [],
     };
   } else {
-    const actualVal = Number(headlineRaw.Actual_Value || 0);
-    const targetVal = 90.0;
-    const varVal = actualVal - targetVal;
-    const rag = computeBestQmRag(actualVal);
+    const actualVal = headlineRaw.Actual_Value != null ? Number(headlineRaw.Actual_Value) : null;
+    const targetVal = headlineRaw.Target_Value != null ? Number(headlineRaw.Target_Value) : null;
+    const varVal = (actualVal != null && targetVal != null) ? actualVal - targetVal : null;
+    const accountsRaw = Array.isArray(snapData.Accounts) ? snapData.Accounts : [];
+    const rag = (headlineRaw.Headline_RAG as 'Green' | 'Amber' | 'Red') || (totalAccounts === 1 ? (accountsRaw[0]?.RAG as 'Green' | 'Amber' | 'Red') : null) || null;
     const onTarget = Number(headlineRaw.Accounts_On_Target || 0);
     const passRate = totalAccounts > 0 ? Number(((onTarget / totalAccounts) * 100).toFixed(1)) : 0;
     const criticalNames: string[] = Array.isArray(headlineRaw.Critical_Deficit_Names)
@@ -462,12 +458,12 @@ export async function fetchBestQmDiagnostic(
       : [];
 
     headline = {
-      Actual_Value: Number(actualVal.toFixed(4)),
-      Actual_Display: formatScore(actualVal),
-      Target_Value: 90,
-      Target_Display: '90',
-      Variance_Value: Number(varVal.toFixed(4)),
-      Variance_Display: formatVarianceScore(varVal),
+      Actual_Value: actualVal != null ? Number(actualVal.toFixed(4)) : null,
+      Actual_Display: actualVal != null ? formatScore(actualVal) : 'N/A',
+      Target_Value: targetVal,
+      Target_Display: targetVal != null ? String(targetVal) : 'N/A',
+      Variance_Value: varVal != null ? Number(varVal.toFixed(4)) : null,
+      Variance_Display: varVal != null ? formatVarianceScore(varVal) : 'N/A',
       RAG: rag,
       Accounts_On_Target: onTarget,
       Total_Accounts: totalAccounts,
@@ -482,18 +478,18 @@ export async function fetchBestQmDiagnostic(
   // Build Parameters
   const paramsRaw = Array.isArray(snapData.Parameters) ? snapData.Parameters : [];
   const parameters: BestQmParameter[] = paramsRaw.map((p: any) => {
-    const actual = Number(p.Actual_Value || 0);
-    const target = 90.0;
-    const variance = actual - target;
-    const rag = (p.RAG as 'Green' | 'Amber' | 'Red') || computeBestQmRag(actual) || 'Red';
+    const actual = p.Actual_Value != null ? Number(p.Actual_Value) : null;
+    const target = p.Target_Value != null ? Number(p.Target_Value) : null;
+    const variance = (actual != null && target != null) ? actual - target : null;
+    const rag = (p.RAG as 'Green' | 'Amber' | 'Red') || null;
     return {
       Parameter_Name: String(p.Parameter_Name || ''),
-      Actual_Value: Number(actual.toFixed(4)),
-      Actual_Display: formatScore(actual),
-      Target_Value: 90,
-      Target_Display: '90',
-      Variance_Value: Number(variance.toFixed(4)),
-      Variance_Display: formatVarianceScore(variance),
+      Actual_Value: actual != null ? Number(actual.toFixed(4)) : null,
+      Actual_Display: actual != null ? formatScore(actual) : 'N/A',
+      Target_Value: target,
+      Target_Display: target != null ? String(target) : 'N/A',
+      Variance_Value: variance != null ? Number(variance.toFixed(4)) : null,
+      Variance_Display: variance != null ? formatVarianceScore(variance) : 'N/A',
       RAG: rag,
       Account_Count: Number(p.Account_Count || 0),
     };
@@ -503,19 +499,19 @@ export async function fetchBestQmDiagnostic(
   const mapComparison = (rows: any[]): BestQmComparisonItem[] => {
     if (!Array.isArray(rows)) return [];
     return rows.map((r) => {
-      const actual = Number(r.Actual_Value || 0);
-      const target = 90.0;
-      const variance = actual - target;
+      const actual = r.Actual_Value != null ? Number(r.Actual_Value) : null;
+      const target = r.Target_Value != null ? Number(r.Target_Value) : null;
+      const variance = (actual != null && target != null) ? actual - target : null;
       return {
         Dimension_Key: String(r.Dimension_Key || ''),
         Dimension_Label: String(r.Dimension_Label || ''),
-        Actual_Value: Number(actual.toFixed(4)),
-        Actual_Display: formatScore(actual),
-        Target_Value: 90,
-        Target_Display: '90',
-        Variance_Value: Number(variance.toFixed(4)),
-        Variance_Display: formatVarianceScore(variance),
-        RAG: computeBestQmRag(actual) || 'Red',
+        Actual_Value: actual != null ? Number(actual.toFixed(4)) : null,
+        Actual_Display: actual != null ? formatScore(actual) : 'N/A',
+        Target_Value: target,
+        Target_Display: target != null ? String(target) : 'N/A',
+        Variance_Value: variance != null ? Number(variance.toFixed(4)) : null,
+        Variance_Display: variance != null ? formatVarianceScore(variance) : 'N/A',
+        RAG: (r.RAG as 'Green' | 'Amber' | 'Red') || null,
         Account_Count: Number(r.Account_Count || 0),
       };
     });
@@ -530,15 +526,15 @@ export async function fetchBestQmDiagnostic(
   // Build Account Rows
   const accountsRaw = Array.isArray(snapData.Accounts) ? snapData.Accounts : [];
   const accountRows: BestQmAccountRow[] = accountsRaw.map((a: any) => {
-    const actual = Number(a.Actual_Value || 0);
-    const target = 90.0;
-    const variance = actual - target;
+    const actual = a.Actual_Value != null ? Number(a.Actual_Value) : null;
+    const target = a.Target_Value != null ? Number(a.Target_Value) : null;
+    const variance = (actual != null && target != null) ? actual - target : null;
     const rawParams = Array.isArray(a.Parameters) ? a.Parameters : [];
     const itemParams: BestQmAccountRowParameter[] = rawParams.map((p: any) => ({
       Parameter_Name: String(p.Parameter_Name || ''),
       Score: Number(Number(p.Score || 0).toFixed(4)),
       Score_Display: p.Score_Display || formatScore(Number(p.Score || 0)),
-      RAG: String(p.RAG || 'Amber'),
+      RAG: String(p.RAG || ''),
     }));
 
     return {
@@ -549,13 +545,13 @@ export async function fetchBestQmDiagnostic(
       Sr_Director: String(a.Sr_Director || ''),
       Site: String(a.Site || ''),
       LOB: String(a.LOB || ''),
-      Actual_Value: Number(actual.toFixed(4)),
-      Actual_Display: formatScore(actual),
-      Target_Value: 90,
-      Target_Display: '90',
-      Variance_Value: Number(variance.toFixed(4)),
-      Variance_Display: formatVarianceScore(variance),
-      RAG: (a.RAG as 'Green' | 'Amber' | 'Red') || computeBestQmRag(actual) || 'Red',
+      Actual_Value: actual != null ? Number(actual.toFixed(4)) : null,
+      Actual_Display: actual != null ? formatScore(actual) : 'N/A',
+      Target_Value: target,
+      Target_Display: target != null ? String(target) : 'N/A',
+      Variance_Value: variance != null ? Number(variance.toFixed(4)) : null,
+      Variance_Display: variance != null ? formatVarianceScore(variance) : 'N/A',
+      RAG: (a.RAG as 'Green' | 'Amber' | 'Red') || null,
       Parameters: itemParams,
       LD_Remarks: a.LD_Remarks ? String(a.LD_Remarks) : null,
     };
@@ -565,19 +561,19 @@ export async function fetchBestQmDiagnostic(
   const trendPoints: BestQmTrendPoint[] = trendRows.map((t: any) => {
     const monthRaw = t.Month;
     const monthStr = typeof monthRaw === 'object' && monthRaw?.value ? monthRaw.value : String(monthRaw);
-    const actual = Number(t.Actual_Value || 0);
-    const target = 90.0;
-    const variance = actual - target;
+    const actual = t.Actual_Value != null ? Number(t.Actual_Value) : null;
+    const target = t.Target_Value != null ? Number(t.Target_Value) : null;
+    const variance = (actual != null && target != null) ? actual - target : null;
     return {
       Month: monthStr,
       Reporting_Month: String(t.Reporting_Month || ''),
-      Actual_Value: Number(actual.toFixed(4)),
-      Actual_Display: formatScore(actual),
-      Target_Value: 90,
-      Target_Display: '90',
-      Variance_Value: Number(variance.toFixed(4)),
-      Variance_Display: formatVarianceScore(variance),
-      RAG: computeBestQmRag(actual),
+      Actual_Value: actual != null ? Number(actual.toFixed(4)) : null,
+      Actual_Display: actual != null ? formatScore(actual) : 'N/A',
+      Target_Value: target,
+      Target_Display: target != null ? String(target) : 'N/A',
+      Variance_Value: variance != null ? Number(variance.toFixed(4)) : null,
+      Variance_Display: variance != null ? formatVarianceScore(variance) : 'N/A',
+      RAG: (t.RAG as 'Green' | 'Amber' | 'Red') || null,
       Account_Count: Number(t.Account_Count || 0),
     };
   });

@@ -578,9 +578,9 @@ export async function fetchActionsDiagnostic(
   const rawPeriod = periodRows && periodRows.length > 0 ? periodRows[0] : null;
 
   // Process Reporting Context
-  const currentDateStr = rawBacklog?.Current_Business_Date?.value || '2026-08-30';
-  const periodStartDateStr = rawPeriod?.Period_Start_Date?.value || '2025-09-01';
-  const periodEndDateStr = rawPeriod?.Period_End_Date?.value || currentDateStr;
+  const currentDateStr = rawBacklog?.Current_Business_Date?.value || (rawBacklog?.Current_Business_Date ? String(rawBacklog.Current_Business_Date) : new Date().toISOString().split('T')[0]);
+  const periodStartDateStr = rawPeriod?.Period_Start_Date?.value || (rawPeriod?.Period_Start_Date ? String(rawPeriod.Period_Start_Date) : currentDateStr);
+  const periodEndDateStr = rawPeriod?.Period_End_Date?.value || (rawPeriod?.Period_End_Date ? String(rawPeriod.Period_End_Date) : currentDateStr);
 
   const reportingContext: ActionsReportingContext = {
     businessTimezone: 'Asia/Kolkata',

@@ -1,6 +1,7 @@
 import { BigQuery } from '@google-cloud/bigquery';
 import { getBigQueryClient, getBigQueryConfig, serializeBigQueryValue } from './bigquery';
 import { ScopeFilters } from './scopedOverview';
+import { resolveReportingWindows } from './reportingPeriod';
 
 export type HygieneTimePeriod = '3M' | '6M' | 'YTD' | '12M';
 
@@ -40,7 +41,7 @@ export interface HygieneMetricSummary {
   metricScale: 'DECIMAL_PERCENTAGE' | 'ZERO_TO_100';
   actualValue: number | null;
   actualDisplay: string;
-  targetValue: number;
+  targetValue: number | null;
   targetDisplay: string;
   varianceValue: number | null;
   varianceDisplay: string;
@@ -69,7 +70,7 @@ export interface PortfolioTniSummary {
 export interface AccountKpiCell {
   actualValue: number | null;
   actualDisplay: string;
-  targetValue: number;
+  targetValue: number | null;
   targetDisplay: string;
   rag: 'Green' | 'Amber' | 'Red' | null;
   dataPresenceStatus: string;
@@ -386,9 +387,24 @@ export async function fetchHygieneDiagnostic(
       CROSS JOIN reporting_ctx rc
       WHERE CAST(e.Month AS STRING) = rc.Latest_Closed_Month
         AND e.Is_MSA_Applicable = true
+    ),
+    kpi_executive AS (
+      SELECT
+        Metric_ID,
+        Actual_Value,
+        Actual_Display,
+        Target_Value,
+        CASE
+          WHEN Metric_ID IN ('M006', 'M007', 'M008') THEN CONCAT(CAST(ROUND(Target_Value * 100, 1) AS STRING), '%')
+          ELSE CAST(Target_Value AS STRING)
+        END AS Target_Display,
+        Aggregate_RAG
+      FROM \`${projectId}.${dataset}.vw_executive_kpi_official\`
+      WHERE Metric_ID IN ('M006', 'M007', 'M008', 'M009', 'M010')
     )
     SELECT
       (SELECT AS STRUCT * FROM reporting_ctx) AS reporting_ctx,
+      (SELECT ARRAY_AGG(e) FROM kpi_executive e) AS executive_kpis,
       (SELECT AS STRUCT * FROM m006_scope_agg) AS m006_agg,
       (SELECT AS STRUCT * FROM m007_scope_agg) AS m007_agg,
       (SELECT AS STRUCT * FROM m008_scope_agg) AS m008_agg,
@@ -694,20 +710,21 @@ export async function fetchHygieneDiagnostic(
     const rawTni = acc.tni;
     const rawAtaExt = acc.ata_ext;
 
-    // Helper for KPI cell
+    // Helper for KPI cell - consumes Target_Value and Target_Display from BQ view
     const parseCell = (
       kpiObj: any,
       metricId: string,
-      scale: 'DECIMAL_PERCENTAGE' | 'ZERO_TO_100',
-      defaultTarget: number,
-      targetDisp: string
+      scale: 'DECIMAL_PERCENTAGE' | 'ZERO_TO_100'
     ): AccountKpiCell => {
+      const tgtVal = kpiObj?.Target_Value !== undefined && kpiObj?.Target_Value !== null ? Number(kpiObj.Target_Value) : null;
+      const tgtDisp = kpiObj?.Target_Display ?? (tgtVal !== null ? String(tgtVal) : 'N/A');
+
       if (!kpiObj || kpiObj.Actual_Value === null || kpiObj.Actual_Value === undefined) {
         return {
           actualValue: null,
           actualDisplay: 'N/A',
-          targetValue: defaultTarget,
-          targetDisplay: targetDisp,
+          targetValue: tgtVal,
+          targetDisplay: tgtDisp,
           rag: null,
           dataPresenceStatus: kpiObj?.Data_Presence_Status || 'NO SOURCE ROW / NOT APPLICABLE',
         };
@@ -725,21 +742,24 @@ export async function fetchHygieneDiagnostic(
       return {
         actualValue: val,
         actualDisplay: kpiObj.Actual_Display || (scale === 'DECIMAL_PERCENTAGE' ? formatPercent(val) : formatScore(val)),
-        targetValue: kpiObj.Target_Value ?? defaultTarget,
-        targetDisplay: kpiObj.Target_Display || targetDisp,
+        targetValue: tgtVal,
+        targetDisplay: tgtDisp,
         rag,
         dataPresenceStatus: kpiObj.Data_Presence_Status || 'HAS DATA',
       };
     };
 
-    const cellM006 = parseCell(rawM006, 'M006', 'DECIMAL_PERCENTAGE', 0.95, '95%');
-    const cellM007 = parseCell(rawM007, 'M007', 'DECIMAL_PERCENTAGE', 0.96, '96%');
-    const cellM008 = parseCell(rawM008, 'M008', 'DECIMAL_PERCENTAGE', 0.95, '95%');
-    const cellM009 = parseCell(rawM009, 'M009', 'ZERO_TO_100', 95, '95');
+    const cellM006 = parseCell(rawM006, 'M006', 'DECIMAL_PERCENTAGE');
+    const cellM007 = parseCell(rawM007, 'M007', 'DECIMAL_PERCENTAGE');
+    const cellM008 = parseCell(rawM008, 'M008', 'DECIMAL_PERCENTAGE');
+    const cellM009 = parseCell(rawM009, 'M009', 'ZERO_TO_100');
 
     // M010 special applicability
     const isM010Applicable = rawAtaExt?.Is_MSA_Applicable === true;
     let cellM010: AccountM010Cell;
+    const m010TgtVal = rawM010?.Target_Value !== undefined && rawM010?.Target_Value !== null ? Number(rawM010.Target_Value) : null;
+    const m010TgtDisp = rawM010?.Target_Display ?? (m010TgtVal !== null ? String(m010TgtVal) : 'N/A');
+
     if (isM010Applicable && rawM010 && rawM010.Actual_Value !== null && rawM010.Actual_Value !== undefined) {
       const val = typeof rawM010.Actual_Value === 'number' ? rawM010.Actual_Value : parseFloat(rawM010.Actual_Value);
       const rag = (rawM010.RAG as 'Green' | 'Amber' | 'Red') || null;
@@ -754,8 +774,8 @@ export async function fetchHygieneDiagnostic(
         isApplicable: true,
         actualValue: val,
         actualDisplay: rawM010.Actual_Display || formatScore(val),
-        targetValue: 94,
-        targetDisplay: '94',
+        targetValue: m010TgtVal,
+        targetDisplay: m010TgtDisp,
         rag,
         dataPresenceStatus: rawM010.Data_Presence_Status || 'HAS DATA',
       };
@@ -764,8 +784,8 @@ export async function fetchHygieneDiagnostic(
         isApplicable: isM010Applicable,
         actualValue: null,
         actualDisplay: 'N/A',
-        targetValue: 94,
-        targetDisplay: '94',
+        targetValue: m010TgtVal,
+        targetDisplay: m010TgtDisp,
         rag: null,
         dataPresenceStatus: isM010Applicable ? 'NO CLIENT SCORE' : 'NO SOURCE ROW / NOT APPLICABLE',
       };
@@ -851,27 +871,57 @@ export async function fetchHygieneDiagnostic(
 
   const totalAccounts = rawAccounts.length;
 
+  // Index Executive KPIs from BigQuery semantic layer
+  const execKpiMap = new Map<string, any>();
+  if (Array.isArray(raw1.executive_kpis)) {
+    for (const item of raw1.executive_kpis) {
+      if (item && item.Metric_ID) {
+        execKpiMap.set(item.Metric_ID, item);
+      }
+    }
+  }
+
   // Construct Headline KPIs
   const buildHeadlineKpi = (
     metricId: 'M006' | 'M007' | 'M008' | 'M009' | 'M010',
     metricName: string,
     scale: 'DECIMAL_PERCENTAGE' | 'ZERO_TO_100',
-    actualVal: number | null,
-    targetVal: number,
-    targetDisp: string,
-    greenFloor: number,
-    amberFloor: number
+    actualVal: number | null
   ): HygieneMetricSummary => {
+    const execItem = execKpiMap.get(metricId);
+    const targetVal = execItem?.Target_Value !== undefined && execItem?.Target_Value !== null
+      ? Number(execItem.Target_Value)
+      : null;
+    const targetDisp = execItem?.Target_Display ?? (targetVal !== null ? String(targetVal) : 'N/A');
+
     let rag: 'Green' | 'Amber' | 'Red' | null = null;
     let varianceVal: number | null = null;
     let varianceDisp = 'N/A';
 
-    if (actualVal !== null && !isNaN(actualVal)) {
-      varianceVal = actualVal - targetVal;
-      if (actualVal >= greenFloor) rag = 'Green';
-      else if (actualVal >= amberFloor) rag = 'Amber';
-      else rag = 'Red';
+    // RAG from BQ semantic executive layer when available, or account-level evaluation
+    if (totalAccounts === 1 && rawAccounts[0]) {
+      const cell = metricId === 'M006' ? (rawAccounts[0] as any).m006 :
+                   metricId === 'M007' ? (rawAccounts[0] as any).m007 :
+                   metricId === 'M008' ? (rawAccounts[0] as any).m008 :
+                   metricId === 'M009' ? (rawAccounts[0] as any).m009 :
+                   (rawAccounts[0] as any).m010;
+      rag = cell?.rag ?? null;
+    } else if (execItem?.Aggregate_RAG && totalAccounts >= 190) {
+      rag = execItem.Aggregate_RAG as 'Green' | 'Amber' | 'Red';
+    } else {
+      // Filtered scope count distribution
+      const counts = kpiCounts[metricId];
+      if (counts.red > counts.green && counts.red > counts.amber) {
+        rag = 'Red';
+      } else if (counts.amber >= counts.green && counts.amber > 0) {
+        rag = 'Amber';
+      } else if (counts.green > 0) {
+        rag = 'Green';
+      }
+    }
 
+    if (actualVal !== null && !isNaN(actualVal) && targetVal !== null) {
+      varianceVal = actualVal - targetVal;
       varianceDisp = scale === 'DECIMAL_PERCENTAGE'
         ? `${varianceVal >= 0 ? '+' : ''}${(varianceVal * 100).toFixed(1)}%`
         : `${varianceVal >= 0 ? '+' : ''}${varianceVal.toFixed(1)}`;
@@ -906,11 +956,11 @@ export async function fetchHygieneDiagnostic(
   const m009Val = raw1.m009_agg?.m009_actual != null ? parseFloat(raw1.m009_agg.m009_actual) : null;
   const m010Val = raw1.m010_agg?.m010_actual != null ? parseFloat(raw1.m010_agg.m010_actual) : null;
 
-  const headlineM006 = buildHeadlineKpi('M006', 'Audit & Feedback', 'DECIMAL_PERCENTAGE', m006Val, 0.95, '95%', 0.95, 0.90);
-  const headlineM007 = buildHeadlineKpi('M007', 'Hygiene Audits', 'DECIMAL_PERCENTAGE', m007Val, 0.96, '96%', 0.96, 0.90);
-  const headlineM008 = buildHeadlineKpi('M008', 'Calibration', 'DECIMAL_PERCENTAGE', m008Val, 0.95, '95%', 0.95, 0.90);
-  const headlineM009 = buildHeadlineKpi('M009', 'ATA Internal', 'ZERO_TO_100', m009Val, 95, '95', 95, 90);
-  const headlineM010 = buildHeadlineKpi('M010', 'ATA External', 'ZERO_TO_100', m010Val, 94, '94', 94, 90);
+  const headlineM006 = buildHeadlineKpi('M006', 'Audit & Feedback', 'DECIMAL_PERCENTAGE', m006Val);
+  const headlineM007 = buildHeadlineKpi('M007', 'Hygiene Audits', 'DECIMAL_PERCENTAGE', m007Val);
+  const headlineM008 = buildHeadlineKpi('M008', 'Calibration', 'DECIMAL_PERCENTAGE', m008Val);
+  const headlineM009 = buildHeadlineKpi('M009', 'ATA Internal', 'ZERO_TO_100', m009Val);
+  const headlineM010 = buildHeadlineKpi('M010', 'ATA External', 'ZERO_TO_100', m010Val);
 
   // TNI Headline (No invented target, neutral rag)
   const tniAdherenceValue = tniApplicable > 0 ? tniPublished / tniApplicable : null;
@@ -954,13 +1004,8 @@ export async function fetchHygieneDiagnostic(
     };
   });
 
-  const requestedMonthCountMap: Record<HygieneTimePeriod, number> = {
-    '3M': 3,
-    '6M': 6,
-    'YTD': 7,
-    '12M': 12,
-  };
-  const requestedMonthCount = requestedMonthCountMap[period] || 3;
+  const resolvedPeriod = resolveReportingWindows(reportingCtx.latestClosedMonth);
+  const requestedMonthCount = resolvedPeriod.windows[period]?.monthCount || 3;
   const availableMonthCount = historicalTrends.length;
   const historyCoverageStatus = availableMonthCount >= requestedMonthCount ? 'FULL_HISTORY' : 'PARTIAL_HISTORY';
 

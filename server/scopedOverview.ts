@@ -1,5 +1,6 @@
 import { BigQuery } from '@google-cloud/bigquery';
 import { getBigQueryClient, getBigQueryConfig, serializeBigQueryValue } from './bigquery';
+import { fetchAuthoritativeReportingContext } from './reportingPeriod';
 
 export const BUSINESS_TIMEZONE = process.env.BUSINESS_TIMEZONE || 'Asia/Kolkata';
 
@@ -22,56 +23,30 @@ export interface ReportingContext {
 }
 
 export async function fetchReportingContext(bq: BigQuery, projectId: string, dataset: string, location?: string): Promise<ReportingContext> {
-  const query = `
-    SELECT
-      Latest_Available_Month,
-      Latest_Closed_Month,
-      FORMAT_DATE('%b-%y', Latest_Closed_Month) AS Official_Reporting_Month,
-      Current_Open_Month,
-      FORMAT_DATE('%b-%y', Current_Open_Month) AS Live_Reporting_Month,
-      Current_Submission_Deadline
-    FROM \`${projectId}.${dataset}.vw_reporting_context\`
-    LIMIT 1
-  `;
-  try {
-    const [rows] = await bq.query({ query, location });
-    if (rows && rows[0]) {
-      const row = serializeBigQueryValue(rows[0]) as Record<string, unknown>;
-      return {
-        Latest_Available_Month: (row.Latest_Available_Month as string) || '2026-08-01',
-        Latest_Closed_Month: (row.Latest_Closed_Month as string) || '2026-07-01',
-        Official_Reporting_Month: (row.Official_Reporting_Month as string) || 'Jul-26',
-        Current_Open_Month: (row.Current_Open_Month as string) || '2026-08-01',
-        Live_Reporting_Month: (row.Live_Reporting_Month as string) || 'Aug-26',
-        Current_Submission_Deadline: (row.Current_Submission_Deadline as string) || '2026-09-05',
-      };
-    }
-  } catch (err) {
-    console.error('Error fetching reporting context:', err);
-  }
+  const authCtx = await fetchAuthoritativeReportingContext(bq, projectId, dataset, location);
   return {
-    Latest_Available_Month: '2026-08-01',
-    Latest_Closed_Month: '2026-07-01',
-    Official_Reporting_Month: 'Jul-26',
-    Current_Open_Month: '2026-08-01',
-    Live_Reporting_Month: 'Aug-26',
-    Current_Submission_Deadline: '2026-09-05',
+    Latest_Available_Month: authCtx.latestAvailableMonth,
+    Latest_Closed_Month: authCtx.latestClosedMonth,
+    Official_Reporting_Month: authCtx.officialReportingMonth,
+    Current_Open_Month: authCtx.currentOpenMonth,
+    Live_Reporting_Month: authCtx.liveReportingMonth,
+    Current_Submission_Deadline: authCtx.currentSubmissionDeadline,
   };
 }
 
 const DEFAULT_METRIC_META = [
-  { Metric_ID: 'M001', Display_Order: 1, Category: 'Enterprise', Category_Sort_Order: 1, Metric: 'Client Sentiment', Metric_Scale: 'SCORE', Default_Target: 4.2, Direction: 'Higher' },
-  { Metric_ID: 'M002', Display_Order: 2, Category: 'Process Health', Category_Sort_Order: 2, Metric: 'SLA Achievement', Metric_Scale: 'DECIMAL_PERCENTAGE', Default_Target: 0.95, Direction: 'Higher' },
-  { Metric_ID: 'M003', Display_Order: 3, Category: 'Process Health', Category_Sort_Order: 2, Metric: 'RNP Format', Metric_Scale: 'DECIMAL_PERCENTAGE', Default_Target: 0.95, Direction: 'Higher' },
-  { Metric_ID: 'M004', Display_Order: 4, Category: 'Process Health', Category_Sort_Order: 2, Metric: 'EURA', Metric_Scale: 'DECIMAL_PERCENTAGE', Default_Target: 0.95, Direction: 'Higher' },
-  { Metric_ID: 'M005', Display_Order: 5, Category: 'Process Health', Category_Sort_Order: 2, Metric: 'BEST QM', Metric_Scale: 'INTEGER_PERCENTAGE', Default_Target: 90.0, Direction: 'Higher' },
-  { Metric_ID: 'M006', Display_Order: 6, Category: 'Hygiene', Category_Sort_Order: 3, Metric: 'Audit & Feedback', Metric_Scale: 'DECIMAL_PERCENTAGE', Default_Target: 0.95, Direction: 'Higher' },
-  { Metric_ID: 'M007', Display_Order: 7, Category: 'Hygiene', Category_Sort_Order: 3, Metric: 'Hygiene Audits', Metric_Scale: 'DECIMAL_PERCENTAGE', Default_Target: 0.96, Direction: 'Higher' },
-  { Metric_ID: 'M008', Display_Order: 8, Category: 'Hygiene', Category_Sort_Order: 3, Metric: 'Calibration', Metric_Scale: 'DECIMAL_PERCENTAGE', Default_Target: 0.95, Direction: 'Higher' },
-  { Metric_ID: 'M009', Display_Order: 9, Category: 'Hygiene', Category_Sort_Order: 3, Metric: 'ATA Internal', Metric_Scale: 'INTEGER_PERCENTAGE', Default_Target: 95.0, Direction: 'Higher' },
-  { Metric_ID: 'M010', Display_Order: 10, Category: 'Hygiene', Category_Sort_Order: 3, Metric: 'ATA External', Metric_Scale: 'INTEGER_PERCENTAGE', Default_Target: 94.0, Direction: 'Higher' },
-  { Metric_ID: 'M011', Display_Order: 11, Category: 'QA Team', Category_Sort_Order: 4, Metric: 'QA Utilization', Metric_Scale: 'DECIMAL_PERCENTAGE', Default_Target: 0.90, Direction: 'Higher' },
-  { Metric_ID: 'M012', Display_Order: 12, Category: 'QA Team', Category_Sort_Order: 4, Metric: 'QA Attrition', Metric_Scale: 'DECIMAL_PERCENTAGE', Default_Target: 0.10, Direction: 'Lower' },
+  { Metric_ID: 'M001', Display_Order: 1, Category: 'Enterprise', Category_Sort_Order: 1, Metric: 'Client Sentiment', Metric_Scale: 'SCORE', Direction: 'Higher' },
+  { Metric_ID: 'M002', Display_Order: 2, Category: 'Process Health', Category_Sort_Order: 2, Metric: 'SLA Achievement', Metric_Scale: 'DECIMAL_PERCENTAGE', Direction: 'Higher' },
+  { Metric_ID: 'M003', Display_Order: 3, Category: 'Process Health', Category_Sort_Order: 2, Metric: 'RNP Format', Metric_Scale: 'DECIMAL_PERCENTAGE', Direction: 'Higher' },
+  { Metric_ID: 'M004', Display_Order: 4, Category: 'Process Health', Category_Sort_Order: 2, Metric: 'EURA', Metric_Scale: 'DECIMAL_PERCENTAGE', Direction: 'Higher' },
+  { Metric_ID: 'M005', Display_Order: 5, Category: 'Process Health', Category_Sort_Order: 2, Metric: 'BEST QM', Metric_Scale: 'INTEGER_PERCENTAGE', Direction: 'Higher' },
+  { Metric_ID: 'M006', Display_Order: 6, Category: 'Hygiene', Category_Sort_Order: 3, Metric: 'Audit & Feedback', Metric_Scale: 'DECIMAL_PERCENTAGE', Direction: 'Higher' },
+  { Metric_ID: 'M007', Display_Order: 7, Category: 'Hygiene', Category_Sort_Order: 3, Metric: 'Hygiene Audits', Metric_Scale: 'DECIMAL_PERCENTAGE', Direction: 'Higher' },
+  { Metric_ID: 'M008', Display_Order: 8, Category: 'Hygiene', Category_Sort_Order: 3, Metric: 'Calibration', Metric_Scale: 'DECIMAL_PERCENTAGE', Direction: 'Higher' },
+  { Metric_ID: 'M009', Display_Order: 9, Category: 'Hygiene', Category_Sort_Order: 3, Metric: 'ATA Internal', Metric_Scale: 'INTEGER_PERCENTAGE', Direction: 'Higher' },
+  { Metric_ID: 'M010', Display_Order: 10, Category: 'Hygiene', Category_Sort_Order: 3, Metric: 'ATA External', Metric_Scale: 'INTEGER_PERCENTAGE', Direction: 'Higher' },
+  { Metric_ID: 'M011', Display_Order: 11, Category: 'QA Team', Category_Sort_Order: 4, Metric: 'QA Utilization', Metric_Scale: 'DECIMAL_PERCENTAGE', Direction: 'Higher' },
+  { Metric_ID: 'M012', Display_Order: 12, Category: 'QA Team', Category_Sort_Order: 4, Metric: 'QA Attrition', Metric_Scale: 'DECIMAL_PERCENTAGE', Direction: 'Lower' },
 ];
 
 function buildZeroScopeKpiCards() {
@@ -83,7 +58,8 @@ function buildZeroScopeKpiCards() {
     Metric: m.Metric,
     Actual_Value: null,
     Actual_Display: null,
-    Target_Value: m.Default_Target,
+    Target_Value: null,
+    Target_Display: null,
     RAG: null,
     Favourable_Variance: null,
     Accounts_In_Scope: 0,
@@ -700,18 +676,18 @@ export async function fetchScopedDashboardOverview(filters: ScopeFilters) {
       WHERE ${whereClause}
     ),
     metric_meta AS (
-      SELECT 'M001' as Metric_ID, 1 as Display_Order, 'Enterprise' as Category, 1 as Category_Sort_Order, 'Client Sentiment' as Metric, 'SCORE' as Metric_Scale, 4.2 as Default_Target, 'Higher' as Direction UNION ALL
-      SELECT 'M002', 2, 'Process Health', 2, 'SLA Achievement', 'DECIMAL_PERCENTAGE', 0.95, 'Higher' UNION ALL
-      SELECT 'M003', 3, 'Process Health', 2, 'RNP Format', 'DECIMAL_PERCENTAGE', 0.95, 'Higher' UNION ALL
-      SELECT 'M004', 4, 'Process Health', 2, 'EURA', 'DECIMAL_PERCENTAGE', 0.95, 'Higher' UNION ALL
-      SELECT 'M005', 5, 'Process Health', 2, 'BEST QM', 'INTEGER_PERCENTAGE', 90.0, 'Higher' UNION ALL
-      SELECT 'M006', 6, 'Hygiene', 3, 'Audit & Feedback', 'DECIMAL_PERCENTAGE', 0.95, 'Higher' UNION ALL
-      SELECT 'M007', 7, 'Hygiene', 3, 'Hygiene Audits', 'DECIMAL_PERCENTAGE', 0.96, 'Higher' UNION ALL
-      SELECT 'M008', 8, 'Hygiene', 3, 'Calibration', 'DECIMAL_PERCENTAGE', 0.95, 'Higher' UNION ALL
-      SELECT 'M009', 9, 'Hygiene', 3, 'ATA Internal', 'INTEGER_PERCENTAGE', 95.0, 'Higher' UNION ALL
-      SELECT 'M010', 10, 'Hygiene', 3, 'ATA External', 'INTEGER_PERCENTAGE', 94.0, 'Higher' UNION ALL
-      SELECT 'M011', 11, 'QA Team', 4, 'QA Utilization', 'DECIMAL_PERCENTAGE', 0.90, 'Higher' UNION ALL
-      SELECT 'M012', 12, 'QA Team', 4, 'QA Attrition', 'DECIMAL_PERCENTAGE', 0.10, 'Lower'
+      SELECT 'M001' as Metric_ID, 1 as Display_Order, 'Enterprise' as Category, 1 as Category_Sort_Order, 'Client Sentiment' as Metric, 'SCORE' as Metric_Scale, 'Higher' as Direction UNION ALL
+      SELECT 'M002', 2, 'Process Health', 2, 'SLA Achievement', 'DECIMAL_PERCENTAGE', 'Higher' UNION ALL
+      SELECT 'M003', 3, 'Process Health', 2, 'RNP Format', 'DECIMAL_PERCENTAGE', 'Higher' UNION ALL
+      SELECT 'M004', 4, 'Process Health', 2, 'EURA', 'DECIMAL_PERCENTAGE', 'Higher' UNION ALL
+      SELECT 'M005', 5, 'Process Health', 2, 'BEST QM', 'INTEGER_PERCENTAGE', 'Higher' UNION ALL
+      SELECT 'M006', 6, 'Hygiene', 3, 'Audit & Feedback', 'DECIMAL_PERCENTAGE', 'Higher' UNION ALL
+      SELECT 'M007', 7, 'Hygiene', 3, 'Hygiene Audits', 'DECIMAL_PERCENTAGE', 'Higher' UNION ALL
+      SELECT 'M008', 8, 'Hygiene', 3, 'Calibration', 'DECIMAL_PERCENTAGE', 'Higher' UNION ALL
+      SELECT 'M009', 9, 'Hygiene', 3, 'ATA Internal', 'INTEGER_PERCENTAGE', 'Higher' UNION ALL
+      SELECT 'M010', 10, 'Hygiene', 3, 'ATA External', 'INTEGER_PERCENTAGE', 'Higher' UNION ALL
+      SELECT 'M011', 11, 'QA Team', 4, 'QA Utilization', 'DECIMAL_PERCENTAGE', 'Higher' UNION ALL
+      SELECT 'M012', 12, 'QA Team', 4, 'QA Attrition', 'DECIMAL_PERCENTAGE', 'Lower'
     ),
     kpi_base AS (
       SELECT
@@ -724,6 +700,17 @@ export async function fetchScopedDashboardOverview(filters: ScopeFilters) {
         k.Effective_RAG
       FROM \`${projectId}.${dataset}.vw_kpi_snapshot_official\` k
       JOIN scoped_accounts s ON k.Account_ID = s.Account_ID
+    ),
+    scope_rollup AS (
+      SELECT
+        Metric_ID,
+        Aggregate_RAG
+      FROM \`${projectId}.${dataset}.vw_kpi_rollup\`
+      WHERE Is_Latest_Closed_Period = TRUE
+        AND (
+          Scope_Level = 'ENTERPRISE'
+          ${filters.vertical && filters.vertical !== 'ALL' ? "OR (Scope_Level = 'VERTICAL' AND Scope_Name = @vertical)" : ''}
+        )
     ),
     kpi_agg AS (
       SELECT
@@ -744,17 +731,20 @@ export async function fetchScopedDashboardOverview(filters: ScopeFilters) {
           ELSE AVG(k.Actual_Value)
         END AS Actual_Value,
 
-        COALESCE(AVG(k.Target_Value), m.Default_Target) AS Target_Value,
+        AVG(k.Target_Value) AS Target_Value,
 
         (SELECT COUNT(DISTINCT Account_ID) FROM scoped_accounts) AS Accounts_In_Scope,
         COUNT(DISTINCT CASE WHEN k.Actual_Value IS NOT NULL THEN k.Account_ID END) AS Accounts_With_Data,
         COUNT(DISTINCT CASE WHEN k.Actual_Value IS NULL THEN k.Account_ID END) AS Accounts_Without_Data,
         COUNTIF(k.Effective_RAG = 'Green') AS Green_Account_Count,
         COUNTIF(k.Effective_RAG = 'Amber') AS Amber_Account_Count,
-        COUNTIF(k.Effective_RAG = 'Red') AS Red_Account_Count
+        COUNTIF(k.Effective_RAG = 'Red') AS Red_Account_Count,
+        MAX(k.Effective_RAG) AS Single_Account_RAG,
+        MAX(r.Aggregate_RAG) AS Semantic_Rollup_RAG
       FROM metric_meta m
       LEFT JOIN kpi_base k ON m.Metric_ID = k.Metric_ID
-      GROUP BY m.Metric_ID, m.Display_Order, m.Category, m.Category_Sort_Order, m.Metric, m.Metric_Scale, m.Direction, m.Default_Target
+      LEFT JOIN scope_rollup r ON m.Metric_ID = r.Metric_ID
+      GROUP BY m.Metric_ID, m.Display_Order, m.Category, m.Category_Sort_Order, m.Metric, m.Metric_Scale, m.Direction
     )
     SELECT
       Metric_ID,
@@ -783,31 +773,13 @@ export async function fetchScopedDashboardOverview(filters: ScopeFilters) {
       END AS Target_Display,
 
       CASE
-        WHEN Actual_Value IS NULL THEN NULL
-        WHEN Metric_ID = 'M001' THEN
-          CASE WHEN Actual_Value >= 4.2 THEN 'Green' WHEN Actual_Value >= 3.6 THEN 'Amber' ELSE 'Red' END
-        WHEN Metric_ID = 'M002' THEN
-          CASE WHEN Actual_Value >= Target_Value THEN 'Green' WHEN Actual_Value >= Target_Value - 0.05 THEN 'Amber' ELSE 'Red' END
-        WHEN Metric_ID = 'M003' THEN
-          CASE WHEN Actual_Value >= 0.95 THEN 'Green' WHEN Actual_Value >= 0.90 THEN 'Amber' ELSE 'Red' END
-        WHEN Metric_ID = 'M004' THEN
-          CASE WHEN Actual_Value >= 0.95 THEN 'Green' WHEN Actual_Value >= 0.90 THEN 'Amber' ELSE 'Red' END
-        WHEN Metric_ID = 'M005' THEN
-          CASE WHEN Actual_Value >= 90.0 THEN 'Green' WHEN Actual_Value >= 85.0 THEN 'Amber' ELSE 'Red' END
-        WHEN Metric_ID = 'M006' THEN
-          CASE WHEN Actual_Value >= 0.95 THEN 'Green' WHEN Actual_Value >= 0.90 THEN 'Amber' ELSE 'Red' END
-        WHEN Metric_ID = 'M007' THEN
-          CASE WHEN Actual_Value >= 0.96 THEN 'Green' WHEN Actual_Value >= 0.90 THEN 'Amber' ELSE 'Red' END
-        WHEN Metric_ID = 'M008' THEN
-          CASE WHEN Actual_Value >= 0.95 THEN 'Green' WHEN Actual_Value >= 0.90 THEN 'Amber' ELSE 'Red' END
-        WHEN Metric_ID = 'M009' THEN
-          CASE WHEN Actual_Value >= 95.0 THEN 'Green' WHEN Actual_Value >= 90.0 THEN 'Amber' ELSE 'Red' END
-        WHEN Metric_ID = 'M010' THEN
-          CASE WHEN Actual_Value >= 94.0 THEN 'Green' WHEN Actual_Value >= 90.0 THEN 'Amber' ELSE 'Red' END
-        WHEN Metric_ID = 'M011' THEN
-          CASE WHEN Actual_Value >= 0.90 THEN 'Green' WHEN Actual_Value >= 0.85 THEN 'Amber' ELSE 'Red' END
-        WHEN Metric_ID = 'M012' THEN
-          CASE WHEN Actual_Value <= 0.10 THEN 'Green' WHEN Actual_Value <= 0.15 THEN 'Amber' ELSE 'Red' END
+        -- When a single account is in scope, consume its authoritative Effective_RAG directly from vw_kpi_snapshot_official
+        WHEN Accounts_In_Scope = 1 THEN Single_Account_RAG
+        -- When a governed semantic rollup exists (Enterprise or Vertical), consume it directly
+        WHEN Semantic_Rollup_RAG IS NOT NULL THEN Semantic_Rollup_RAG
+        -- Multi-account custom filtered fallback: evaluate based on account distribution
+        WHEN Red_Account_Count > Green_Account_Count AND Red_Account_Count > Amber_Account_Count THEN 'Red'
+        WHEN Amber_Account_Count >= Green_Account_Count THEN 'Amber'
         ELSE 'Green'
       END AS RAG,
 

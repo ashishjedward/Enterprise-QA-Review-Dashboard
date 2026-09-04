@@ -1,4 +1,5 @@
 import { getBigQueryClient, getBigQueryConfig } from './bigquery';
+import { fetchAuthoritativeReportingContext, ReportingPeriodKey } from './reportingPeriod';
 
 export interface ValueAddsDiagnosticFilters {
   timePeriod?: string;
@@ -12,48 +13,25 @@ export interface ValueAddsDiagnosticFilters {
 
 export async function fetchValueAddsDiagnostic(filters: ValueAddsDiagnosticFilters) {
   const bq = getBigQueryClient();
-  const { projectId, dataset } = getBigQueryConfig();
+  const { projectId, dataset, location } = getBigQueryConfig();
 
-  const validTimePeriods = ['3M', '6M', 'YTD', '12M'];
-  const timePeriod = filters.timePeriod && validTimePeriods.includes(filters.timePeriod)
-    ? filters.timePeriod
+  const validTimePeriods: ReportingPeriodKey[] = ['3M', '6M', 'YTD', '12M'];
+  const timePeriod: ReportingPeriodKey = filters.timePeriod && (validTimePeriods as string[]).includes(filters.timePeriod)
+    ? (filters.timePeriod as ReportingPeriodKey)
     : '12M';
 
-  // 1. Fetch Reporting Context
-  const repCtxQuery = `
-    SELECT 
-      Latest_Available_Month,
-      Latest_Closed_Month,
-      Current_Open_Month,
-      Current_Submission_Deadline
-    FROM \`${projectId}.${dataset}.vw_reporting_context\`
-    LIMIT 1
-  `;
-  const [repCtxRows] = await bq.query({ query: repCtxQuery });
-  const repCtx = repCtxRows[0] || {};
+  // 1. Fetch Authoritative Reporting Context & Dynamic Time Windows (Anchored to Latest_Closed_Month)
+  const authCtx = await fetchAuthoritativeReportingContext(bq, projectId, dataset, location);
+  const periodWindow = authCtx.windows[timePeriod];
 
-  const latestClosedMonthStr = repCtx.Latest_Closed_Month?.value || '2026-07-01';
-  const latestAvailableMonthStr = repCtx.Latest_Available_Month?.value || '2026-08-01';
-  const currentOpenMonthStr = repCtx.Current_Open_Month?.value || '2026-08-01';
-  const currentSubmissionDeadlineStr = repCtx.Current_Submission_Deadline?.value || '2026-09-05';
+  const latestClosedMonthStr = authCtx.latestClosedMonth;
+  const latestAvailableMonthStr = authCtx.latestAvailableMonth;
+  const currentOpenMonthStr = authCtx.currentOpenMonth;
+  const currentSubmissionDeadlineStr = authCtx.currentSubmissionDeadline;
+  const officialReportingMonth = authCtx.officialReportingMonth;
 
-  // Format official reporting month (Jul-26 from 2026-07-01)
-  const [closedYr, closedMo] = latestClosedMonthStr.split('-');
-  const moNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const officialReportingMonth = `${moNames[parseInt(closedMo, 10) - 1]}-${closedYr.slice(2)}`;
-
-  // Determine window dates based on Latest_Available_Month (2026-08-01)
-  let startDateStr = '2025-09-01';
-  if (timePeriod === '3M') {
-    startDateStr = '2026-06-01';
-  } else if (timePeriod === '6M') {
-    startDateStr = '2026-03-01';
-  } else if (timePeriod === 'YTD') {
-    startDateStr = '2026-01-01';
-  } else if (timePeriod === '12M') {
-    startDateStr = '2025-09-01';
-  }
-  const endDateStr = '2026-08-31';
+  const startDateStr = periodWindow.startDate;
+  const endDateStr = periodWindow.endDate;
 
   // Build account scope WHERE clause
   const whereClauses: string[] = ['1=1'];
@@ -530,7 +508,8 @@ export async function fetchValueAddsDiagnostic(filters: ValueAddsDiagnosticFilte
       currentSubmissionDeadline: currentSubmissionDeadlineStr,
       selectedTimePeriod: timePeriod,
       startDate: startDateStr,
-      endDate: endDateStr
+      endDate: endDateStr,
+      monthCount: periodWindow.monthCount,
     },
     scope: {
       accountCount: scopedAccountCount,

@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { X, HeartPulse, AlertCircle, HelpCircle, CheckCircle2, ChevronRight, ArrowRight } from 'lucide-react';
-import { useFilters, DrawerType } from '../../context/FilterContext';
+import { X, HeartPulse, AlertCircle, HelpCircle, CheckCircle2, ChevronRight } from 'lucide-react';
+import { useFilters } from '../../context/FilterContext';
+import { useDashboardData } from '../../context/DashboardDataContext';
 import { StatusBadge } from '../common/StatusBadge';
-import { AccountData, RAGStatus } from '../../types';
+import { RAGStatus } from '../../types';
 
 export const SentimentDrawer: React.FC = () => {
-  const { activeDrawer, closeDrawer, filteredAccounts, selectAccountAndNavigate, filters } = useFilters();
+  const { activeDrawer, closeDrawer, selectAccountAndNavigate, filters } = useFilters();
+  const { overview } = useDashboardData();
 
   // Determine active filter based on activeDrawer
   const [filterRag, setFilterRag] = useState<'ALL' | RAGStatus>('ALL');
@@ -19,9 +21,16 @@ export const SentimentDrawer: React.FC = () => {
 
   if (!activeDrawer || !activeDrawer.startsWith('sentiment')) return null;
 
-  const accounts = filteredAccounts.filter((a) => {
+  const redCount = overview?.Client_Sentiment_Red_Accounts ?? 0;
+  const amberCount = overview?.Client_Sentiment_Amber_Accounts ?? 0;
+  const greenCount = overview?.Client_Sentiment_Green_Accounts ?? 0;
+  const totalCount = redCount + amberCount + greenCount;
+
+  const attentionAccounts = overview?.Top_Attention_Accounts || [];
+  const accounts = attentionAccounts.filter((a) => {
+    const rag = a.Client_Sentiment_RAG?.toUpperCase();
     if (filterRag === 'ALL') return true;
-    return a.clientSentiment === filterRag;
+    return rag === filterRag;
   });
 
   return (
@@ -68,7 +77,7 @@ export const SentimentDrawer: React.FC = () => {
                 filterRag === 'ALL' ? 'bg-[#1A2B4B] text-white' : 'text-slate-600 hover:bg-slate-100'
               }`}
             >
-              All ({filteredAccounts.length})
+              All ({totalCount})
             </button>
             <button
               onClick={() => setFilterRag('RED')}
@@ -77,7 +86,7 @@ export const SentimentDrawer: React.FC = () => {
               }`}
             >
               <AlertCircle className="w-3 h-3" />
-              Red ({filteredAccounts.filter((a) => a.clientSentiment === 'RED').length})
+              Red ({redCount})
             </button>
             <button
               onClick={() => setFilterRag('AMBER')}
@@ -86,7 +95,7 @@ export const SentimentDrawer: React.FC = () => {
               }`}
             >
               <HelpCircle className="w-3 h-3" />
-              Amber ({filteredAccounts.filter((a) => a.clientSentiment === 'AMBER').length})
+              Amber ({amberCount})
             </button>
             <button
               onClick={() => setFilterRag('GREEN')}
@@ -95,7 +104,7 @@ export const SentimentDrawer: React.FC = () => {
               }`}
             >
               <CheckCircle2 className="w-3 h-3" />
-              Green ({filteredAccounts.filter((a) => a.clientSentiment === 'GREEN').length})
+              Green ({greenCount})
             </button>
           </div>
 
@@ -108,8 +117,8 @@ export const SentimentDrawer: React.FC = () => {
         <div className="p-4 overflow-y-auto flex-1 space-y-2.5 divide-y divide-slate-100">
           {accounts.map((acc) => (
             <div
-              key={acc.id}
-              onClick={() => selectAccountAndNavigate(acc.id)}
+              key={acc.Account_ID}
+              onClick={() => selectAccountAndNavigate(acc.Account_ID)}
               className="pt-2.5 first:pt-0 p-3 rounded-xs border border-slate-200 bg-slate-50/30 hover:bg-white hover:border-[#0D9488] hover:shadow-xs transition-all cursor-pointer group"
             >
               {/* Row 1: Account, Score & RAG */}
@@ -117,35 +126,36 @@ export const SentimentDrawer: React.FC = () => {
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs sm:text-sm font-bold text-[#1A2B4B] group-hover:text-[#0D9488] transition-colors">
-                      {acc.name}
+                      {acc.Account_Name}
                     </span>
-                    <span className="text-[11px] text-slate-500 font-medium font-mono">({acc.vertical})</span>
+                    <span className="text-[11px] text-slate-500 font-medium font-mono">({acc.Vertical})</span>
                   </div>
                   <div className="text-[11px] text-slate-500 mt-0.5">
-                    QA Leader: <strong className="text-slate-800 font-medium">{acc.qaLeader}</strong> &bull; Sr Director: <strong className="text-slate-800 font-medium">{acc.srDirector}</strong> &bull; Site: <strong className="text-slate-800 font-medium">{acc.site}</strong>
+                    QA Leader: <strong className="text-slate-800 font-medium">{acc.QA_Leader}</strong> &bull; QA Director: <strong className="text-slate-800 font-medium">{acc.QA_Director}</strong> &bull; Site: <strong className="text-slate-800 font-medium">{acc.Site || 'N/A'}</strong>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
                   <div className="text-right">
                     <div className="text-xs font-bold text-[#1A2B4B] font-mono">
-                      Score: {acc.sentimentScore}/100
+                      Score: {acc.Client_Sentiment_Score !== null && acc.Client_Sentiment_Score !== undefined ? `${acc.Client_Sentiment_Score}/100` : 'N/A'}
                     </div>
+                    {/* Previous sentiment historical field not present in current BigQuery schema; render neutral N/A */}
                     <div className="text-[9px] text-slate-400 font-mono">
-                      Prev: {acc.previousSentiment}
+                      Prev: N/A
                     </div>
                   </div>
-                  <StatusBadge status={acc.clientSentiment} size="sm" />
+                  <StatusBadge status={(acc.Client_Sentiment_RAG?.toUpperCase() as RAGStatus) || 'AMBER'} size="sm" />
                 </div>
               </div>
 
-              {/* Row 2: Sentiment Reason */}
+              {/* Row 2: Sentiment Reason / Primary Driver */}
               <div className="p-2 rounded-xs bg-white border border-slate-200 text-xs mb-2">
                 <div className="text-[9px] font-bold uppercase text-slate-400 tracking-widest mb-0.5">
                   Comment / Primary Driver:
                 </div>
                 <p className="text-slate-800 font-normal leading-relaxed text-[11px]">
-                  {acc.sentimentReason}
+                  {acc.Primary_Attention_Driver || 'Operational governance monitoring'}
                 </p>
               </div>
 
@@ -155,7 +165,9 @@ export const SentimentDrawer: React.FC = () => {
                   <span className="font-bold text-amber-900 text-[9px] uppercase tracking-widest block">
                     Action Required / Intervention:
                   </span>
-                  <p className="mt-0.5 leading-snug text-[11px] font-normal">{acc.actionRequired}</p>
+                  <p className="mt-0.5 leading-snug text-[11px] font-normal">
+                    {acc.Red_KPIs ? `Remediate Red KPIs: ${acc.Red_KPIs}` : 'Active executive governance review'}
+                  </p>
                 </div>
                 <div className="flex items-center gap-1 text-[#0D9488] font-bold shrink-0 group-hover:translate-x-0.5 transition-transform text-xs">
                   <span>Diagnostic</span>
@@ -167,7 +179,7 @@ export const SentimentDrawer: React.FC = () => {
 
           {accounts.length === 0 && (
             <div className="text-center py-12 text-slate-400 text-xs font-mono">
-              No accounts match the selected sentiment filter criteria.
+              No attention accounts match the selected sentiment filter criteria.
             </div>
           )}
         </div>

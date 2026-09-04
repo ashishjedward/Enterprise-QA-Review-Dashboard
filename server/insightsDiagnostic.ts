@@ -1,4 +1,5 @@
 import { getBigQueryClient, getBigQueryConfig, serializeBigQueryValue } from './bigquery';
+import { fetchAuthoritativeReportingContext, formatMonthLabel, ReportingPeriodKey } from './reportingPeriod';
 
 export interface InsightsDiagnosticFilters {
   timePeriod?: string;
@@ -207,49 +208,25 @@ export async function fetchInsightsDiagnostic(
   const bq = getBigQueryClient();
   const { projectId, dataset, location } = getBigQueryConfig();
 
-  const validTimePeriods = ['3M', '6M', 'YTD', '12M'];
-  const timePeriod =
-    filters.timePeriod && validTimePeriods.includes(filters.timePeriod)
-      ? filters.timePeriod
+  const validTimePeriods: ReportingPeriodKey[] = ['3M', '6M', 'YTD', '12M'];
+  const timePeriod: ReportingPeriodKey =
+    filters.timePeriod && (validTimePeriods as string[]).includes(filters.timePeriod)
+      ? (filters.timePeriod as ReportingPeriodKey)
       : '12M';
 
-  // 1. Fetch Reporting Context
-  const repCtxQuery = `
-    SELECT 
-      Latest_Available_Month,
-      Latest_Closed_Month,
-      Current_Open_Month,
-      Current_Submission_Deadline
-    FROM \`${projectId}.${dataset}.vw_reporting_context\`
-    LIMIT 1
-  `;
-  const [repCtxRows] = await bq.query({ query: repCtxQuery, location });
-  const repCtx = repCtxRows[0] || {};
+  // 1. Fetch Authoritative Reporting Context & Dynamic Time Windows
+  const authCtx = await fetchAuthoritativeReportingContext(bq, projectId, dataset, location);
+  const periodWindow = authCtx.windows[timePeriod];
 
-  const latestClosedMonthStr = repCtx.Latest_Closed_Month?.value || '2026-07-01';
-  const latestAvailableMonthStr = repCtx.Latest_Available_Month?.value || '2026-08-01';
-  const currentOpenMonthStr = repCtx.Current_Open_Month?.value || '2026-08-01';
-  const currentSubmissionDeadlineStr =
-    repCtx.Current_Submission_Deadline?.value || '2026-09-05';
+  const latestClosedMonthStr = authCtx.latestClosedMonth;
+  const latestAvailableMonthStr = authCtx.latestAvailableMonth;
+  const currentOpenMonthStr = authCtx.currentOpenMonth;
+  const currentSubmissionDeadlineStr = authCtx.currentSubmissionDeadline;
+  const officialReportingMonth = authCtx.officialReportingMonth;
 
-  const [closedYr, closedMo] = latestClosedMonthStr.split('-');
-  const moNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const officialReportingMonth = `${moNames[parseInt(closedMo, 10) - 1]}-${closedYr.slice(2)}`;
-
-  // Determine historical trend start month (Closed months only! Ending at Latest_Closed_Month)
-  let trendStartDateStr = '2025-08-01'; // 12M closed: Aug-25 to Jul-26
-  if (timePeriod === '3M') {
-    trendStartDateStr = '2026-05-01'; // May-26 to Jul-26 (3 closed months)
-  } else if (timePeriod === '6M') {
-    trendStartDateStr = '2026-02-01'; // Feb-26 to Jul-26 (6 closed months)
-  } else if (timePeriod === 'YTD') {
-    trendStartDateStr = '2026-01-01'; // Jan-26 to Jul-26 (7 closed months)
-  } else if (timePeriod === '12M') {
-    trendStartDateStr = '2025-08-01'; // Aug-25 to Jul-26 (12 closed months)
-  }
-
-  // Selected period date bounds for commercial
-  const commStartDateStr = trendStartDateStr;
+  // Closed months only ending at latestClosedMonth
+  const trendStartDateStr = periodWindow.startMonth;
+  const commStartDateStr = periodWindow.startMonth;
   const commEndDateStr = latestClosedMonthStr;
 
   // Build filter predicates
@@ -1175,7 +1152,7 @@ export async function fetchInsightsDiagnostic(
       const points: PeriodTrendPoint[] = sortedPoints.map(pt => {
         const rawDate = pt.Month?.value || pt.Month || '';
         const [y, m] = rawDate.split('-');
-        const monthLabel = m ? `${moNames[parseInt(m, 10) - 1]}-${y.slice(2)}` : rawDate;
+        const monthLabel = m && y ? formatMonthLabel(parseInt(y, 10), parseInt(m, 10)) : rawDate;
         const val = pt.Avg_Actual_Value !== null ? Number(pt.Avg_Actual_Value) : null;
         const rag =
           pt.Red_Count > 0 && pt.Red_Count >= pt.Green_Count
@@ -1193,8 +1170,8 @@ export async function fetchInsightsDiagnostic(
 
       const [sY, sM] = (startPt.Month?.value || startPt.Month || '').split('-');
       const [eY, eM] = (endPt.Month?.value || endPt.Month || '').split('-');
-      const startMonthLabel = sM ? `${moNames[parseInt(sM, 10) - 1]}-${sY.slice(2)}` : '';
-      const endMonthLabel = eM ? `${moNames[parseInt(eM, 10) - 1]}-${eY.slice(2)}` : '';
+      const startMonthLabel = sM && sY ? formatMonthLabel(parseInt(sY, 10), parseInt(sM, 10)) : '';
+      const endMonthLabel = eM && eY ? formatMonthLabel(parseInt(eY, 10), parseInt(eM, 10)) : '';
 
       periodTrends.push({
         metricId: tm.id,
@@ -1326,6 +1303,9 @@ export async function fetchInsightsDiagnostic(
       businessTimezone: 'Asia/Kolkata',
       totalMonitoredAccounts: totalAccountsInScope,
       timePeriod,
+      periodStartDate: periodWindow.startDate,
+      periodEndDate: periodWindow.endDate,
+      monthCount: periodWindow.monthCount,
     },
     scopeSummary: {
       totalAccountsInScope,
